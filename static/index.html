@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>탱크로리 배송 관리</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+
+/* ── 공통 ── */
+.hidden { display: none !important; }
+.btn { padding: 10px 18px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; }
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-success { background: #16a34a; color: #fff; }
+.btn-success:hover { background: #15803d; }
+.btn-warning { background: #d97706; color: #fff; }
+.btn-warning:hover { background: #b45309; }
+.btn-purple { background: #7c3aed; color: #fff; }
+.btn-purple:hover { background: #6d28d9; }
+.btn-danger { background: #dc2626; color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-gray { background: #6b7280; color: #fff; }
+.btn-gray:hover { background: #4b5563; }
+.btn-outline { background: #fff; color: #2563eb; border: 1.5px solid #2563eb; }
+.btn-outline:hover { background: #eff6ff; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.badge-wait     { background: #fef3c7; color: #92400e; }
+.badge-loaded   { background: #ede9fe; color: #5b21b6; }
+.badge-departed { background: #dbeafe; color: #1e40af; }
+.badge-done     { background: #dcfce7; color: #166534; }
+.badge-cancel   { background: #fee2e2; color: #991b1b; }
+
+/* ── 로그인 ── */
+#loginPage { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3a5f, #2563eb); }
+.login-box { background: #fff; border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.login-logo { text-align: center; font-size: 44px; margin-bottom: 14px; }
+.login-box h1 { text-align: center; font-size: 20px; font-weight: 800; color: #1e3a5f; margin-bottom: 4px; }
+.login-box p { text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 28px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.form-group input,
+.form-group select,
+.form-group textarea { width: 100%; padding: 10px 14px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none; transition: border .15s; font-family: inherit; }
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus { border-color: #2563eb; }
+.form-group textarea { resize: vertical; }
+.login-box .btn { width: 100%; padding: 12px; font-size: 15px; margin-top: 8px; }
+.error-msg { color: #dc2626; font-size: 13px; text-align: center; margin-top: 10px; min-height: 20px; }
+
+/* ── 앱 레이아웃 ── */
+#appPage { display: flex; flex-direction: column; min-height: 100vh; }
+header { background: #1e3a5f; color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+header .brand { font-size: 11px; opacity: .6; margin-bottom: 2px; }
+header h2 { font-size: 16px; font-weight: 700; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 13px; opacity: .8; }
+.logout-btn { background: rgba(255,255,255,.15); color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.logout-btn:hover { background: rgba(255,255,255,.25); }
+
+/* 탭 바 */
+.tab-bar { background: #fff; border-bottom: 2px solid #e5e7eb; display: flex; padding: 0 16px; overflow-x: auto; }
+.tab-btn { padding: 14px 16px; font-size: 14px; font-weight: 600; color: #6b7280; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .15s; white-space: nowrap; flex-shrink: 0; }
+.tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+
+/* 콘텐츠 */
+.page-content { padding: 20px; flex: 1; max-width: 960px; margin: 0 auto; width: 100%; }
+
+/* 통계 */
+.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.stat-num { font-size: 26px; font-weight: 800; }
+.stat-label { font-size: 11px; color: #6b7280; margin-top: 4px; }
+.stat-card.s-wait .stat-num     { color: #d97706; }
+.stat-card.s-loaded .stat-num   { color: #7c3aed; }
+.stat-card.s-departed .stat-num { color: #2563eb; }
+.stat-card.s-done .stat-num     { color: #16a34a; }
+.stat-card.s-total .stat-num    { color: #1e3a5f; }
+
+/* 섹션 헤더 */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.section-header h3 { font-size: 16px; font-weight: 700; color: #1e3a5f; }
+
+/* 필터 */
+.filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-bar select,
+.filter-bar input { padding: 8px 12px; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 13px; outline: none; }
+.filter-bar select:focus,
+.filter-bar input:focus { border-color: #2563eb; }
+
+/* 배송 목록 */
+.delivery-list { display: flex; flex-direction: column; gap: 12px; }
+.delivery-card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-left: 4px solid #e5e7eb; transition: box-shadow .15s; cursor: pointer; }
+.delivery-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+.delivery-card.wait     { border-left-color: #d97706; }
+.delivery-card.loaded   { border-left-color: #7c3aed; }
+.delivery-card.departed { border-left-color: #2563eb; }
+.delivery-card.done     { border-left-color: #16a34a; }
+.delivery-card.cancel   { border-left-color: #dc2626; }
+.card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.card-id { font-size: 12px; color: #6b7280; }
+.card-company { font-size: 16px; font-weight: 700; color: #1e3a5f; }
+.card-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px; }
+.meta-label { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.meta-val { color: #374151; font-weight: 500; margin-top: 2px; }
+.card-footer { margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* 모달 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal { background: #fff; border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+.modal-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+.modal-header h3 { font-size: 18px; font-weight: 700; color: #1e3a5f; }
+.modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #6b7280; }
+.modal-body { padding: 20px 24px; }
+.modal-footer { padding: 0 24px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-section-title { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin: 20px 0 12px; border-top: 1px solid #e5e7eb; padding-top: 16px; }
+
+/* 사진 업로드 */
+.photo-upload-area { border: 2px dashed #d1d5db; border-radius: 10px; padding: 24px; text-align: center; cursor: pointer; transition: all .15s; }
+.photo-upload-area:hover { border-color: #2563eb; background: #eff6ff; }
+.upload-icon { font-size: 32px; margin-bottom: 8px; }
+.photo-preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.photo-thumb { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #e5e7eb; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.del-photo { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+
+/* 상세보기 */
+.detail-section { margin-bottom: 20px; }
+.detail-section h4 { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.di-label { font-size: 11px; color: #9ca3af; font-weight: 600; }
+.di-val { font-size: 14px; color: #1a202c; margin-top: 2px; font-weight: 500; }
+.full { grid-column: 1 / -1; }
+
+/* 상태 흐름 */
+.status-flow { display: flex; align-items: center; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+.status-step { padding: 5px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #f3f4f6; color: #9ca3af; }
+.status-step.past   { background: #dcfce7; color: #166534; }
+.status-step.active { background: #2563eb; color: #fff; }
+.s-arrow { color: #d1d5db; font-size: 11px; }
+
+/* 기사 현황 카드 */
+.driver-card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.driver-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.driver-name { font-size: 16px; font-weight: 700; color: #1e3a5f; }
+.driver-status-text { font-size: 13px; color: #374151; margin-bottom: 8px; }
+.driver-stats { display: flex; gap: 14px; font-size: 12px; color: #6b7280; }
+
+/* 다운로드 바 */
+.download-bar { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.download-bar span { font-size: 13px; font-weight: 600; color: #374151; }
+
+/* 토스트 */
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e3a5f; color: #fff; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 999; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; }
+#toast.show { opacity: 1; }
+
+/* 로딩 */
+.loading { text-align: center; padding: 40px; color: #9ca3af; font-size: 14px; }
+.spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin .7s linear infinite; margin-right: 8px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 테이블 */
+.data-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.data-table th { background: #1e3a5f; color: #fff; padding: 12px 14px; text-align: left; font-size: 13px; }
+.data-table td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid #f3f4f6; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #f9fafb; }
+
+/* 알림 박스 */
+.info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #1e40af; margin-bottom: 16px; }
+
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .form-row { grid-template-columns: 1fr; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .card-meta { grid-template-columns: 1fr; }
+  .page-content { padding: 14px; }
+  header h2 { font-size: 14px; }
+  .tab-btn { font-size: 13px; padding: 12px 10px; }
+  .modal { max-height: 95vh; }
+  .download-bar { gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ 로그인 ══ -->
+<div id="loginPage">
+  <div class="login-box">
+    <div class="login-logo">🚛</div>
+    <h1>탱크로리 배송 관리</h1>
+    <p>액체 화학물질 운송 업무 관리 시스템</p>
+    <div class="form-group">
+      <label>아이디</label>
+      <input type="text" id="loginUsername" placeholder="아이디 입력" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>비밀번호</label>
+      <input type="password" id="loginPassword" placeholder="비밀번호 입력" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()" id="loginBtn">로그인</button>
+    <div class="error-msg" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ══ 앱 ══ -->
+<div id="appPage" class="hidden">
+  <header>
+    <div>
+      <div class="brand">🚛 탱크로리 배송 관리 시스템</div>
+      <h2 id="headerTitle">대시보드</h2>
+    </div>
+    <div class="header-right">
+      <span class="header-user" id="headerUser"></span>
+      <button class="logout-btn" onclick="doLogout()">로그아웃</button>
+    </div>
+  </header>
+
+  <!-- 관리자 탭 -->
+  <div id="adminTabs" class="tab-bar hidden">
+    <button class="tab-btn active" onclick="switchTab('dashboard', this)">📊 대시보드</button>
+    <button class="tab-btn" onclick="switchTab('deliveries', this)">📋 배송 목록</button>
+    <button class="tab-btn" onclick="switchTab('drivers', this)">👷 기사 현황</button>
+    <button class="tab-btn" onclick="switchTab('vehicles', this)">🚛 차량 관리</button>
+    <button class="tab-btn" onclick="switchTab('items', this)">🗂️ 품목 관리</button>
+    <button class="tab-btn" onclick="switchTab('users', this)">⚙️ 사용자 관리</button>
+  </div>
+
+  <!-- 기사 탭 -->
+  <div id="driverTabs" class="tab-bar hidden">
+    <button class="tab-btn active" onclick="switchTab('myDeliveries', this)">📦 내 배송</button>
+    <button class="tab-btn" onclick="switchTab('myHistory', this)">📜 완료 내역</button>
+  </div>
+
+  <div class="page-content">
+
+    <!-- 관리자: 대시보드 -->
+    <div id="tab-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card s-wait">
+          <div class="stat-num" id="stat-wait">-</div>
+          <div class="stat-label">⏳ 대기중</div>
+        </div>
+        <div class="stat-card s-loaded">
+          <div class="stat-num" id="stat-loaded">-</div>
+          <div class="stat-label">📦 상차완료</div>
+        </div>
+        <div class="stat-card s-departed">
+          <div class="stat-num" id="stat-departed">-</div>
+          <div class="stat-label">🚛 출발</div>
+        </div>
+        <div class="stat-card s-done">
+          <div class="stat-num" id="stat-done">-</div>
+          <div class="stat-label">✅ 완료</div>
+        </div>
+        <div class="stat-card s-total">
+          <div class="stat-num" id="stat-total">-</div>
+          <div class="stat-label">📋 오늘 전체</div>
+        </div>
+      </div>
+      <div class="section-header">
+        <h3>오늘의 배송 현황</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ 배송 할당</button>
+      </div>
+      <div class="delivery-list" id="dashboardList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 관리자: 배송 목록 -->
+    <div id="tab-deliveries" class="hidden">
+      <div class="section-header">
+        <h3>배송 목록</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ 배송 할당</button>
+      </div>
+      <div class="download-bar">
+        <span>📥 다운로드</span>
+        <button class="btn btn-outline btn-sm" onclick="downloadExcel()">📊 엑셀 다운로드</button>
+      </div>
+      <div class="filter-bar">
+        <select id="filterStatus" onchange="loadDeliveries()">
+          <option value="">전체 상태</option>
+          <option value="wait">대기중</option>
+          <option value="loaded">상차완료</option>
+          <option value="departed">출발</option>
+          <option value="done">완료</option>
+          <option value="cancel">취소</option>
+        </select>
+        <select id="filterDriver" onchange="loadDeliveries()">
+          <option value="">전체 기사</option>
+        </select>
+        <input type="date" id="filterDateFrom" onchange="loadDeliveries()">
+        <input type="date" id="filterDateTo" onchange="loadDeliveries()">
+      </div>
+      <div class="delivery-list" id="deliveryList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 관리자: 기사 현황 -->
+    <div id="tab-drivers" class="hidden">
+      <div class="section-header"><h3>기사 현황</h3></div>
+      <div id="driverStatusList" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="loading"><span class="spinner"></span>불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 관리자: 차량 관리 -->
+    <div id="tab-vehicles" class="hidden">
+      <div class="section-header">
+        <h3>차량 관리</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddVehicleModal()">+ 차량 추가</button>
+      </div>
+      <div id="vehicleTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 관리자: 품목 관리 -->
+    <div id="tab-items" class="hidden">
+      <div class="section-header">
+        <h3>품목 관리</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddItemModal()">+ 품목 추가</button>
+      </div>
+      <div class="info-box">💡 배송 할당 시 선택할 수 있는 품목 목록을 관리합니다.</div>
+      <div id="itemTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 관리자: 사용자 관리 -->
+    <div id="tab-users" class="hidden">
+      <div class="section-header">
+        <h3>사용자 관리</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddUserModal()">+ 사용자 추가</button>
+      </div>
+      <div id="userTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 기사: 내 배송 -->
+    <div id="tab-myDeliveries" class="hidden">
+      <div class="section-header"><h3>배정된 배송</h3></div>
+      <div class="delivery-list" id="myDeliveryList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 기사: 완료 내역 -->
+    <div id="tab-myHistory" class="hidden">
+      <div class="section-header"><h3>완료된 배송</h3></div>
+      <div class="delivery-list" id="myHistoryList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ 배송 할당 모달 ══ -->
+<div id="assignModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📋 배송 할당</h3>
+      <button class="modal-close" onclick="closeModal('assignModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>업체명 *</label>
+          <input type="text" id="f-company" placeholder="예: 한화케미칼">
+        </div>
+        <div class="form-group">
+          <label>목적지 *</label>
+          <input type="text" id="f-dest" placeholder="예: 울산시 남구 삼산동">
+        </div>
+      </div>
+      <div class="form-section-title">품목 정보</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>품목 *</label>
+          <select id="f-item">
+            <option value="">선택하세요</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>수량 (Kg) *</label>
+          <input type="number" id="f-qty" placeholder="예: 5000" min="1">
+        </div>
+      </div>
+      <div class="form-section-title">배송 담당</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>담당 기사 *</label>
+          <select id="f-driver">
+            <option value="">선택하세요</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>차량 번호 *</label>
+          <select id="f-vehicle">
+            <option value="">선택하세요</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>배송 날짜 *</label>
+          <input type="date" id="f-date">
+        </div>
+        <div class="form-group">
+          <label>배송 시간 *</label>
+          <input type="time" id="f-time">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>특이사항</label>
+        <textarea id="f-note" rows="3" placeholder="위험물 취급 주의사항, 현장 특이사항 등"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('assignModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAssign()" id="assignBtn">배송 할당</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 상세보기 모달 ══ -->
+<div id="detailModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📦 배송 상세</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer" id="detailFooter"></div>
+  </div>
+</div>
+
+
+<!-- ══ 계근표 등록 모달 (완료 처리) ══ -->
+<div id="photoModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📄 계근표 등록 (완료 처리)</h3>
+      <button class="modal-close" onclick="closeModal('photoModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">계근표 사진을 첨부해주세요. (1장 이상 필수)</p>
+      <div class="photo-upload-area" onclick="document.getElementById('photoInput').click()">
+        <div class="upload-icon">📷</div>
+        <p style="font-size:13px;color:#6b7280;">탭하여 사진 추가<br><span style="font-size:11px;">계근표, 하역 완료 사진 등</span></p>
+        <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="previewPhotos(event)">
+      </div>
+      <div class="photo-preview-grid" id="photoPreviewGrid"></div>
+      <div class="form-group" style="margin-top:16px;">
+        <label>메모 (선택)</label>
+        <textarea id="completeMemo" rows="2" placeholder="완료 관련 메모"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('photoModal')">취소</button>
+      <button class="btn btn-success" onclick="submitComplete()" id="completeBtn">✅ 완료 처리</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 사용자 추가 모달 ══ -->
+<div id="addUserModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👤 사용자 추가</h3>
+      <button class="modal-close" onclick="closeModal('addUserModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>이름 *</label>
+          <input type="text" id="u-name" placeholder="예: 홍길동">
+        </div>
+        <div class="form-group">
+          <label>아이디 *</label>
+          <input type="text" id="u-username" placeholder="예: driver11">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>비밀번호 *</label>
+          <input type="password" id="u-password" placeholder="초기 비밀번호">
+        </div>
+        <div class="form-group">
+          <label>역할 *</label>
+          <select id="u-role">
+            <option value="driver">배송기사</option>
+            <option value="admin">관리자</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addUserModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAddUser()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 차량 추가 모달 ══ -->
+<div id="addVehicleModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🚛 차량 추가</h3>
+      <button class="modal-close" onclick="closeModal('addVehicleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>차량 번호 *</label>
+        <input type="text" id="v-number" placeholder="예: 12가 3456">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>차량 종류</label>
+          <select id="v-type">
+            <option value="">선택하세요</option>
+            <option>탱크로리 10톤</option>
+            <option>탱크로리 15톤</option>
+            <option>탱크로리 20톤</option>
+            <option>탱크로리 25톤</option>
+            <option>탱크로리 30톤</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>최대 적재량 (Kg)</label>
+          <input type="number" id="v-capacity" placeholder="예: 20000">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>비고</label>
+        <input type="text" id="v-notes" placeholder="예: 산성 전용, 특이사항 등">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addVehicleModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAddVehicle()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 품목 추가 모달 ══ -->
+<div id="addItemModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🗂️ 품목 추가</h3>
+      <button class="modal-close" onclick="closeModal('addItemModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>품목명 *</label>
+        <input type="text" id="i-name" placeholder="예: 황산 (H₂SO₄)">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addItemModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAddItem()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진 전체보기 -->
+<div id="photoViewModal" class="modal-overlay hidden" onclick="closeModal('photoViewModal')">
+  <img id="photoViewImg" style="max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain;">
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// 전역 상태
+// ═══════════════════════════════════════════════════
+let token = localStorage.getItem('token') || '';
+let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+let drivers = [];
+let vehiclesList = [];
+let itemsList = [];
+let photoFiles = [];
+let currentActionId = null;
+let currentTab = '';
+
+const STATUS_LABELS = {
+  wait: '대기중', loaded: '상차완료', departed: '출발', done: '완료', cancel: '취소'
+};
+const STATUS_BADGE = {
+  wait: 'badge-wait', loaded: 'badge-loaded', departed: 'badge-departed',
+  done: 'badge-done', cancel: 'badge-cancel'
+};
+
+// ═══════════════════════════════════════════════════
+// API 유틸
+// ═══════════════════════════════════════════════════
+async function api(method, path, body = null, isForm = false) {
+  const opts = { method, headers: { Authorization: `Bearer ${token}` } };
+  if (body) {
+    if (isForm) {
+      opts.body = body;
+    } else {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+  }
+  const res = await fetch('/api' + path, opts);
+  if (res.status === 401) { doLogout(); return null; }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '오류가 발생했습니다.');
+  }
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return res;
+}
+
+// ═══════════════════════════════════════════════════
+// 로그인 / 로그아웃
+// ═══════════════════════════════════════════════════
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+  btn.disabled = true; btn.textContent = '로그인 중...';
+  try {
+    const form = new URLSearchParams();
+    form.append('username', username);
+    form.append('password', password);
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      errEl.textContent = err.detail || '로그인 실패';
+      return;
+    }
+    const data = await res.json();
+    token = data.access_token;
+    currentUser = data.user;
+    localStorage.setItem('token', token);
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    initApp();
+  } catch (e) {
+    errEl.textContent = '서버에 연결할 수 없습니다.';
+  } finally {
+    btn.disabled = false; btn.textContent = '로그인';
+  }
+}
+
+function doLogout() {
+  token = ''; currentUser = null;
+  localStorage.removeItem('token'); localStorage.removeItem('currentUser');
+  document.getElementById('appPage').classList.add('hidden');
+  document.getElementById('loginPage').classList.remove('hidden');
+  document.getElementById('adminTabs').classList.add('hidden');
+  document.getElementById('driverTabs').classList.add('hidden');
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+}
+
+// ═══════════════════════════════════════════════════
+// 앱 초기화
+// ═══════════════════════════════════════════════════
+async function initApp() {
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('appPage').classList.remove('hidden');
+  document.getElementById('headerUser').textContent = currentUser.name;
+
+  if (currentUser.role === 'admin') {
+    document.getElementById('adminTabs').classList.remove('hidden');
+    document.getElementById('headerTitle').textContent = '관리자 대시보드';
+    currentTab = 'dashboard';
+    await Promise.all([loadDrivers(), loadVehicles(), loadItems()]);
+    await loadDashboard();
+  } else {
+    document.getElementById('driverTabs').classList.remove('hidden');
+    document.getElementById('headerTitle').textContent = '기사 배송 현황';
+    currentTab = 'myDeliveries';
+    await loadMyDeliveries();
+  }
+}
+
+if (token && currentUser) { initApp(); }
+
+// ═══════════════════════════════════════════════════
+// 탭 전환
+// ═══════════════════════════════════════════════════
+function switchTab(name, btn) {
+  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','users','myDeliveries','myHistory'];
+  allTabs.forEach(t => { const el = document.getElementById('tab-' + t); if (el) el.classList.add('hidden'); });
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTab = name;
+
+  if (name === 'dashboard')    loadDashboard();
+  else if (name === 'deliveries') { loadDriverFilterOptions(); loadDeliveries(); }
+  else if (name === 'drivers')    loadDriverStatus();
+  else if (name === 'vehicles')   loadVehicleTab();
+  else if (name === 'items')      loadItemTab();
+  else if (name === 'users')      loadUsers();
+  else if (name === 'myDeliveries') loadMyDeliveries();
+  else if (name === 'myHistory')  loadMyHistory();
+}
+
+// ═══════════════════════════════════════════════════
+// 기사 / 차량 / 품목 목록 로드
+// ═══════════════════════════════════════════════════
+async function loadDrivers() {
+  try {
+    drivers = await api('GET', '/users/drivers');
+    const sel = document.getElementById('f-driver');
+    sel.innerHTML = '<option value="">선택하세요</option>' +
+      drivers.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function loadVehicles() {
+  try {
+    vehiclesList = await api('GET', '/vehicles/');
+    const sel = document.getElementById('f-vehicle');
+    sel.innerHTML = '<option value="">선택하세요</option>' +
+      vehiclesList.map(v => `<option value="${v.vehicle_number}">${v.vehicle_number}${v.vehicle_type ? ' · ' + v.vehicle_type : ''}</option>`).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function loadItems() {
+  try {
+    itemsList = await api('GET', '/items/');
+    const sel = document.getElementById('f-item');
+    sel.innerHTML = '<option value="">선택하세요</option>' +
+      itemsList.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+  } catch (e) { console.error(e); }
+}
+
+// ═══════════════════════════════════════════════════
+// 차량 탭
+// ═══════════════════════════════════════════════════
+async function loadVehicleTab() {
+  document.getElementById('vehicleTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const list = await api('GET', '/vehicles/');
+    if (!list || list.length === 0) { document.getElementById('vehicleTableWrap').innerHTML = emptyMsg('등록된 차량이 없습니다.'); return; }
+    const rows = list.map(v => `
+      <tr>
+        <td>${v.id}</td>
+        <td><strong>${v.vehicle_number}</strong></td>
+        <td>${v.vehicle_type || '-'}</td>
+        <td>${v.capacity ? v.capacity.toLocaleString() + ' Kg' : '-'}</td>
+        <td>${v.notes || '-'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id})">삭제</button></td>
+      </tr>`).join('');
+    document.getElementById('vehicleTableWrap').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>차량번호</th><th>종류</th><th>최대적재량</th><th>비고</th><th>관리</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) { showToast('⚠️ 차량 로딩 실패'); }
+}
+
+function openAddVehicleModal() {
+  ['v-number','v-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('v-type').value = '';
+  document.getElementById('v-capacity').value = '';
+  document.getElementById('addVehicleModal').classList.remove('hidden');
+}
+
+async function submitAddVehicle() {
+  const number   = document.getElementById('v-number').value.trim();
+  const type     = document.getElementById('v-type').value;
+  const capacity = document.getElementById('v-capacity').value;
+  const notes    = document.getElementById('v-notes').value.trim();
+  if (!number) { showToast('⚠️ 차량 번호를 입력해주세요.'); return; }
+  try {
+    await api('POST', '/vehicles/', { vehicle_number: number, vehicle_type: type || null, capacity: capacity ? parseInt(capacity) : null, notes: notes || null });
+    closeModal('addVehicleModal');
+    showToast('✅ 차량이 추가되었습니다.');
+    await loadVehicles();
+    loadVehicleTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function deleteVehicle(id) {
+  if (!confirm('이 차량을 삭제하시겠습니까?')) return;
+  try {
+    await api('DELETE', `/vehicles/${id}`);
+    showToast('✅ 차량이 삭제되었습니다.');
+    await loadVehicles();
+    loadVehicleTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 품목 탭
+// ═══════════════════════════════════════════════════
+async function loadItemTab() {
+  document.getElementById('itemTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const list = await api('GET', '/items/');
+    if (!list || list.length === 0) { document.getElementById('itemTableWrap').innerHTML = emptyMsg('등록된 품목이 없습니다.'); return; }
+    const rows = list.map(i => `
+      <tr>
+        <td>${i.id}</td>
+        <td><strong>${i.name}</strong></td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteItem(${i.id})">삭제</button></td>
+      </tr>`).join('');
+    document.getElementById('itemTableWrap').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>품목명</th><th>관리</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) { showToast('⚠️ 품목 로딩 실패'); }
+}
+
+function openAddItemModal() {
+  document.getElementById('i-name').value = '';
+  document.getElementById('addItemModal').classList.remove('hidden');
+}
+
+async function submitAddItem() {
+  const name = document.getElementById('i-name').value.trim();
+  if (!name) { showToast('⚠️ 품목명을 입력해주세요.'); return; }
+  try {
+    await api('POST', '/items/', { name });
+    closeModal('addItemModal');
+    showToast('✅ 품목이 추가되었습니다.');
+    await loadItems();
+    loadItemTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('이 품목을 삭제하시겠습니까?')) return;
+  try {
+    await api('DELETE', `/items/${id}`);
+    showToast('✅ 품목이 삭제되었습니다.');
+    await loadItems();
+    loadItemTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 대시보드
+// ═══════════════════════════════════════════════════
+async function loadDashboard() {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const list = await api('GET', `/deliveries?date=${today}`);
+    document.getElementById('stat-wait').textContent     = list.filter(d => d.status === 'wait').length;
+    document.getElementById('stat-loaded').textContent   = list.filter(d => d.status === 'loaded').length;
+    document.getElementById('stat-departed').textContent = list.filter(d => d.status === 'departed').length;
+    document.getElementById('stat-done').textContent     = list.filter(d => d.status === 'done').length;
+    document.getElementById('stat-total').textContent    = list.length;
+    document.getElementById('dashboardList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('오늘 배송이 없습니다.');
+  } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
+}
+
+// ═══════════════════════════════════════════════════
+// 배송 목록 (관리자)
+// ═══════════════════════════════════════════════════
+function loadDriverFilterOptions() {
+  const sel = document.getElementById('filterDriver');
+  sel.innerHTML = '<option value="">전체 기사</option>' +
+    drivers.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+}
+
+async function loadDeliveries() {
+  const status   = document.getElementById('filterStatus').value;
+  const driverId = document.getElementById('filterDriver').value;
+  const dateFrom = document.getElementById('filterDateFrom').value;
+  const dateTo   = document.getElementById('filterDateTo').value;
+  let qs = new URLSearchParams();
+  if (status)   qs.append('status', status);
+  if (driverId) qs.append('driver_id', driverId);
+  if (dateFrom) qs.append('date_from', dateFrom);
+  if (dateTo)   qs.append('date_to', dateTo);
+  document.getElementById('deliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const list = await api('GET', '/deliveries?' + qs.toString());
+    document.getElementById('deliveryList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('배송 내역이 없습니다.');
+  } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
+}
+
+// ═══════════════════════════════════════════════════
+// 기사 현황
+// ═══════════════════════════════════════════════════
+async function loadDriverStatus() {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const list = await api('GET', `/deliveries?date=${today}`);
+    const html = drivers.map(dr => {
+      const myD     = list.filter(d => d.driver_id === dr.id);
+      const active  = myD.find(d => d.status === 'loaded' || d.status === 'departed');
+      const doneC   = myD.filter(d => d.status === 'done').length;
+      const waitC   = myD.filter(d => d.status === 'wait').length;
+      const curVeh  = active ? active.vehicle_number : '-';
+      const statusText = active
+        ? `🚛 ${STATUS_LABELS[active.status]} · ${active.company} → ${active.destination}`
+        : '🟢 대기 가능';
+      return `<div class="driver-card">
+        <div class="driver-card-header">
+          <div>
+            <div class="driver-name">👷 ${dr.name}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">현재 차량: ${curVeh}</div>
+          </div>
+          <span class="badge ${active ? 'badge-departed' : 'badge-wait'}">${active ? STATUS_LABELS[active.status] : '대기중'}</span>
+        </div>
+        <div class="driver-status-text">${statusText}</div>
+        <div class="driver-stats">
+          <span>✅ 완료 ${doneC}건</span>
+          <span>⏳ 대기 ${waitC}건</span>
+          <span>📋 오늘 총 ${myD.length}건</span>
+        </div>
+      </div>`;
+    }).join('');
+    document.getElementById('driverStatusList').innerHTML = html || emptyMsg('기사 정보가 없습니다.');
+  } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
+}
+
+// ═══════════════════════════════════════════════════
+// 기사: 내 배송 / 완료 내역
+// ═══════════════════════════════════════════════════
+async function loadMyDeliveries() {
+  document.getElementById('myDeliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const list = await api('GET', `/deliveries?date=${today}`);
+    const active = list.filter(d => d.status !== 'done' && d.status !== 'cancel');
+    document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('배정된 배송이 없습니다.');
+  } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
+}
+
+async function loadMyHistory() {
+  document.getElementById('myHistoryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const list = await api('GET', '/deliveries?status=done');
+    document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driver') || emptyMsg('완료된 배송이 없습니다.');
+  } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
+}
+
+// ═══════════════════════════════════════════════════
+// 배송 카드 렌더링
+// ═══════════════════════════════════════════════════
+function renderDeliveryCards(list, mode) {
+  if (!list || list.length === 0) return '';
+  return list.map(d => deliveryCardHTML(d, mode)).join('');
+}
+
+function deliveryCardHTML(d, mode) {
+  const driverName = d.driver_user ? d.driver_user.name : '-';
+  const actions = buildCardActions(d, mode);
+  return `
+  <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
+    <div class="card-header">
+      <div>
+        <div class="card-id">D${String(d.id).padStart(3,'0')} · ${d.scheduled_date} ${d.delivery_time}</div>
+        <div class="card-company">${d.company}</div>
+      </div>
+      <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABELS[d.status]}</span>
+    </div>
+    <div class="card-meta">
+      <div><div class="meta-label">목적지</div><div class="meta-val">📍 ${d.destination}</div></div>
+      <div><div class="meta-label">품목</div><div class="meta-val">🗂️ ${d.item_name}</div></div>
+      <div><div class="meta-label">수량</div><div class="meta-val">${Number(d.quantity).toLocaleString()} Kg</div></div>
+      <div><div class="meta-label">기사 / 차량</div><div class="meta-val">👷 ${driverName} · ${d.vehicle_number || '-'}</div></div>
+    </div>
+    ${actions ? `<div class="card-footer" onclick="event.stopPropagation()">${actions}</div>` : ''}
+  </div>`;
+}
+
+function buildCardActions(d, mode) {
+  if (mode === 'admin') {
+    let btns = '';
+    if (d.status === 'wait')
+      btns = `<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
+    if (d.status === 'loaded')
+      btns = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
+              <button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'departed')">🚛 출발 처리</button>`;
+    if (d.status === 'departed')
+      btns = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
+              <button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">✅ 완료 처리</button>`;
+    if (d.status === 'done')
+      btns = `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
+    return btns;
+  } else {
+    if (d.status === 'wait')
+      return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+    if (d.status === 'loaded')
+      return `<button class="btn btn-primary btn-sm" onclick="confirmDeparture(${d.id})">🚛 출발</button>`;
+    if (d.status === 'departed')
+      return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+    if (d.status === 'done')
+      return `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
+  }
+  return '';
+}
+
+// ═══════════════════════════════════════════════════
+// 상태 변경
+// ═══════════════════════════════════════════════════
+async function changeStatus(id, status) {
+  const label = STATUS_LABELS[status] || status;
+  if (!confirm(`"${label}"으로 처리하시겠습니까?`)) return;
+  try {
+    const body = { status };
+    if (status === 'departed') body.departure_time = nowTime();
+    if (status === 'done')     body.complete_time  = nowTime();
+    await api('PATCH', `/deliveries/${id}/status`, body);
+    showToast(`"${label}"으로 변경되었습니다.`);
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function revertStatus(id) {
+  if (!confirm('이전 단계로 되돌리시겠습니까?')) return;
+  try {
+    await api('PATCH', `/deliveries/${id}/revert`);
+    showToast('↩️ 이전 단계로 되돌렸습니다.');
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 상차 완료 처리 (기사)
+// ═══════════════════════════════════════════════════
+async function confirmLoaded(id) {
+  if (!confirm('상차 완료 처리하시겠습니까?')) return;
+  try {
+    await api('PATCH', `/deliveries/${id}/status`, {
+      status: 'loaded',
+      loading_complete_time: nowTime(),
+    });
+    showToast('✅ 상차 완료 처리되었습니다.');
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 출발 처리 (기사)
+// ═══════════════════════════════════════════════════
+async function confirmDeparture(id) {
+  if (!confirm('출발 처리하시겠습니까?')) return;
+  try {
+    await api('PATCH', `/deliveries/${id}/status`, {
+      status: 'departed',
+      departure_time: nowTime(),
+    });
+    showToast('🚛 출발 처리되었습니다.');
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 상세보기 모달
+// ═══════════════════════════════════════════════════
+async function openDetail(id) {
+  document.getElementById('detailBody').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  document.getElementById('detailFooter').innerHTML = '';
+  document.getElementById('detailModal').classList.remove('hidden');
+  try {
+    const d = await api('GET', `/deliveries/${id}`);
+    renderDetail(d);
+  } catch (e) {
+    document.getElementById('detailBody').innerHTML = '<p style="color:#dc2626;text-align:center;padding:20px;">불러오기 실패</p>';
+  }
+}
+
+function renderDetail(d) {
+  const steps = ['wait', 'loaded', 'departed', 'done'];
+  const stepLabels = ['대기중', '상차완료', '출발', '완료'];
+  const curIdx = steps.indexOf(d.status === 'cancel' ? 'wait' : d.status);
+
+  const stepsHTML = steps.map((s, i) => {
+    const cls = i < curIdx ? 'past' : (i === curIdx ? 'active' : '');
+    return `<span class="status-step ${cls}">${stepLabels[i]}</span>${i < 3 ? '<span class="s-arrow">▶</span>' : ''}`;
+  }).join('');
+
+  const photosHTML = d.photos && d.photos.length
+    ? `<div class="photo-preview-grid">${d.photos.map(p =>
+        `<div class="photo-thumb"><img src="${p.photo_data}" onclick="viewPhoto('${p.photo_data}')"></div>`
+      ).join('')}</div>`
+    : '<p style="font-size:13px;color:#9ca3af;">첨부된 사진 없음</p>';
+
+  document.getElementById('detailBody').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:12px;color:#6b7280;">D${String(d.id).padStart(3,'0')}</div>
+        <div style="font-size:20px;font-weight:800;color:#1e3a5f;">${d.company}</div>
+      </div>
+      <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABELS[d.status]}</span>
+    </div>
+    <div class="status-flow">${stepsHTML}</div>
+
+    <div class="detail-section">
+      <h4>배송 정보</h4>
+      <div class="detail-grid">
+        <div><div class="di-label">목적지</div><div class="di-val">📍 ${d.destination}</div></div>
+        <div><div class="di-label">배송 일시</div><div class="di-val">🕐 ${d.scheduled_date} ${d.delivery_time}</div></div>
+        <div><div class="di-label">품목</div><div class="di-val">🗂️ ${d.item_name}</div></div>
+        <div><div class="di-label">수량</div><div class="di-val">${Number(d.quantity).toLocaleString()} Kg</div></div>
+        ${d.notes ? `<div class="full"><div class="di-label">특이사항</div><div class="di-val">⚠️ ${d.notes}</div></div>` : ''}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h4>담당 기사 / 차량</h4>
+      <div class="detail-grid">
+        <div><div class="di-label">기사명</div><div class="di-val">👷 ${d.driver_user ? d.driver_user.name : '-'}</div></div>
+        <div><div class="di-label">차량 번호</div><div class="di-val">🚛 ${d.vehicle_number || '-'}</div></div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h4>시간 기록</h4>
+      <div class="detail-grid">
+        <div><div class="di-label">상차 완료</div><div class="di-val">${d.loading_complete_time || '-'}</div></div>
+        <div><div class="di-label">출발</div><div class="di-val">${d.departure_time || '-'}</div></div>
+        <div><div class="di-label">완료</div><div class="di-val">${d.complete_time || '-'}</div></div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h4>계근표 사진 (${d.photos ? d.photos.length : 0}장)</h4>
+      ${photosHTML}
+      ${d.complete_memo ? `<p style="font-size:13px;color:#374151;margin-top:10px;">📝 ${d.complete_memo}</p>` : ''}
+    </div>
+  `;
+
+  let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
+  if (d.status === 'done')
+    footer += `<button class="btn btn-outline" onclick="downloadPDF(${d.id})">📄 계근표 PDF</button>`;
+
+  if (currentUser.role === 'admin') {
+    if (d.status === 'wait')
+      footer += `<button class="btn btn-danger" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
+    if (d.status === 'loaded')
+      footer += `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
+                 <button class="btn btn-primary" onclick="changeStatus(${d.id},'departed')">🚛 출발 처리</button>`;
+    if (d.status === 'departed')
+      footer += `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
+                 <button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">✅ 완료 처리</button>`;
+  } else {
+    if (d.status === 'wait')
+      footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+    if (d.status === 'loaded')
+      footer += `<button class="btn btn-primary" onclick="confirmDeparture(${d.id})">🚛 출발</button>`;
+    if (d.status === 'departed')
+      footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+  }
+  document.getElementById('detailFooter').innerHTML = footer;
+}
+
+// ═══════════════════════════════════════════════════
+// 배송 할당
+// ═══════════════════════════════════════════════════
+function openAssignModal() {
+  const today = new Date().toISOString().slice(0, 10);
+  ['f-company','f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-item').value = '';
+  document.getElementById('f-qty').value = '';
+  document.getElementById('f-driver').value = '';
+  document.getElementById('f-vehicle').value = '';
+  document.getElementById('f-date').value = today;
+  document.getElementById('f-time').value = '09:00';
+  document.getElementById('assignModal').classList.remove('hidden');
+}
+
+async function submitAssign() {
+  const company  = document.getElementById('f-company').value.trim();
+  const dest     = document.getElementById('f-dest').value.trim();
+  const item     = document.getElementById('f-item').value;
+  const qty      = parseInt(document.getElementById('f-qty').value);
+  const driverId = document.getElementById('f-driver').value;
+  const vehicle  = document.getElementById('f-vehicle').value;
+  const date     = document.getElementById('f-date').value;
+  const time     = document.getElementById('f-time').value;
+  const note     = document.getElementById('f-note').value.trim();
+
+  if (!company || !dest || !item || !qty || !driverId || !vehicle || !date || !time) {
+    showToast('⚠️ 필수 항목을 모두 입력해주세요.'); return;
+  }
+
+  const btn = document.getElementById('assignBtn');
+  btn.disabled = true; btn.textContent = '처리 중...';
+  try {
+    await api('POST', '/deliveries', {
+      company, destination: dest, item_name: item, quantity: qty,
+      driver_id: parseInt(driverId), vehicle_number: vehicle,
+      scheduled_date: date, delivery_time: time, notes: note,
+    });
+    closeModal('assignModal');
+    showToast('✅ 배송이 할당되었습니다.');
+    refreshCurrentTab();
+  } catch (e) {
+    showToast('⚠️ ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '배송 할당';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// 계근표 등록 (사진 업로드)
+// ═══════════════════════════════════════════════════
+function openPhotoModal(id) {
+  currentActionId = id;
+  photoFiles = [];
+  document.getElementById('photoPreviewGrid').innerHTML = '';
+  document.getElementById('completeMemo').value = '';
+  document.getElementById('photoInput').value = '';
+  document.getElementById('photoModal').classList.remove('hidden');
+}
+
+function previewPhotos(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    photoFiles.push(file);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const grid = document.getElementById('photoPreviewGrid');
+      const idx = photoFiles.length - 1;
+      const div = document.createElement('div');
+      div.className = 'photo-thumb';
+      div.innerHTML = `<img src="${ev.target.result}"><button class="del-photo" onclick="removePhoto(${idx}, this)">✕</button>`;
+      grid.appendChild(div);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removePhoto(idx, btn) {
+  photoFiles.splice(idx, 1);
+  btn.closest('.photo-thumb').remove();
+}
+
+async function submitComplete() {
+  if (photoFiles.length === 0) { showToast('⚠️ 사진을 1장 이상 첨부해주세요.'); return; }
+  const memo = document.getElementById('completeMemo').value.trim();
+  const btn = document.getElementById('completeBtn');
+  btn.disabled = true; btn.textContent = '업로드 중...';
+  try {
+    const form = new FormData();
+    photoFiles.forEach(f => form.append('files', f));
+    form.append('complete_memo', memo);
+    const res = await fetch(`/api/deliveries/${currentActionId}/photos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '업로드 실패');
+    }
+    closeModal('photoModal');
+    closeModal('detailModal');
+    showToast('✅ 배송이 완료 처리되었습니다!');
+    refreshCurrentTab();
+  } catch (e) {
+    showToast('⚠️ ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ 완료 처리';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// 사용자 관리
+// ═══════════════════════════════════════════════════
+async function loadUsers() {
+  document.getElementById('userTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const users = await api('GET', '/users/');
+    const rows = users.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td>${u.name}</td>
+        <td>${u.username}</td>
+        <td><span class="badge ${u.role === 'admin' ? 'badge-departed' : 'badge-wait'}">${u.role === 'admin' ? '관리자' : '기사'}</span></td>
+        <td><span style="color:#16a34a;font-weight:600;">활성</span></td>
+      </tr>
+    `).join('');
+    document.getElementById('userTableWrap').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th><th>상태</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) { showToast('⚠️ 사용자 로딩 실패'); }
+}
+
+function openAddUserModal() {
+  ['u-name','u-username','u-password'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('u-role').value = 'driver';
+  document.getElementById('addUserModal').classList.remove('hidden');
+}
+
+async function submitAddUser() {
+  const name     = document.getElementById('u-name').value.trim();
+  const username = document.getElementById('u-username').value.trim();
+  const password = document.getElementById('u-password').value;
+  const role     = document.getElementById('u-role').value;
+  if (!name || !username || !password) { showToast('⚠️ 필수 항목을 입력해주세요.'); return; }
+  try {
+    await api('POST', '/users/', { name, username, password, role });
+    closeModal('addUserModal');
+    showToast('✅ 사용자가 추가되었습니다.');
+    loadUsers();
+    loadDrivers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 다운로드
+// ═══════════════════════════════════════════════════
+async function downloadExcel() {
+  const status   = document.getElementById('filterStatus')?.value || '';
+  const driverId = document.getElementById('filterDriver')?.value || '';
+  const dateFrom = document.getElementById('filterDateFrom')?.value || '';
+  const dateTo   = document.getElementById('filterDateTo')?.value || '';
+  let qs = new URLSearchParams();
+  if (status)   qs.append('status', status);
+  if (driverId) qs.append('driver_id', driverId);
+  if (dateFrom) qs.append('date_from', dateFrom);
+  if (dateTo)   qs.append('date_to', dateTo);
+  showToast('📊 엑셀 파일 생성 중...');
+  try {
+    const res = await api('GET', '/exports/excel?' + qs.toString());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `배송목록_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 엑셀 다운로드 완료');
+  } catch (e) { showToast('⚠️ 다운로드 실패'); }
+}
+
+async function downloadPDF(id, e) {
+  if (e) e.stopPropagation();
+  showToast('📄 계근표 PDF 생성 중...');
+  try {
+    const res = await api('GET', `/exports/pdf/${id}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `계근표_D${String(id).padStart(3,'0')}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 계근표 PDF 다운로드 완료');
+  } catch (e) { showToast('⚠️ PDF 생성 실패'); }
+}
+
+// ═══════════════════════════════════════════════════
+// 유틸
+// ═══════════════════════════════════════════════════
+function nowTime() {
+  return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function emptyMsg(msg) { return `<p style="color:#9ca3af;text-align:center;padding:40px;">${msg}</p>`; }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+function viewPhoto(src) {
+  document.getElementById('photoViewImg').src = src;
+  document.getElementById('photoViewModal').classList.remove('hidden');
+}
+function refreshCurrentTab() {
+  if (currentTab === 'dashboard')    loadDashboard();
+  else if (currentTab === 'deliveries')   loadDeliveries();
+  else if (currentTab === 'drivers')      loadDriverStatus();
+  else if (currentTab === 'myDeliveries') loadMyDeliveries();
+  else if (currentTab === 'myHistory')    loadMyHistory();
+}
+
+// 모달 바깥 클릭 시 닫기
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay && overlay.id !== 'photoViewModal') {
+      overlay.classList.add('hidden');
+    }
+  });
+});
+</script>
+</body>
+</html>

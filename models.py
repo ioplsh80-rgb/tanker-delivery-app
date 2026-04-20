@@ -1,0 +1,85 @@
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    password_hash = Column(String(200), nullable=False)
+    role = Column(String(10), nullable=False)          # admin / driver
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    deliveries = relationship("Delivery", back_populates="driver_user", foreign_keys="[Delivery.driver_id]")
+
+
+class Item(Base):
+    """품목 관리"""
+    __tablename__ = "items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company = Column(String(100), nullable=False)           # 업체명
+    destination = Column(String(200), nullable=False)       # 목적지
+    item_name = Column(String(100), nullable=False)         # 품목
+    quantity = Column(Integer, nullable=False)              # 수량 (Kg)
+    driver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    vehicle_number = Column(String(20))                     # 차량번호 (배송마다 별도 지정)
+    scheduled_date = Column(String(10), nullable=False)     # 배송 날짜
+    delivery_time = Column(String(5), nullable=False)       # 배송 시간
+
+    notes = Column(Text)                                    # 특이사항
+
+    # 상태: wait / loaded / departed / done / cancel
+    status = Column(String(10), default="wait")
+
+    # 단계별 시간 기록
+    loading_complete_time = Column(String(5))  # 상차 완료
+    departure_time = Column(String(5))         # 출발
+    complete_time = Column(String(5))          # 완료
+    complete_memo = Column(Text)
+
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    driver_user = relationship("User", foreign_keys=[driver_id], back_populates="deliveries")
+    creator = relationship("User", foreign_keys=[created_by])
+    photos = relationship("DeliveryPhoto", back_populates="delivery", cascade="all, delete-orphan")
+
+
+class Vehicle(Base):
+    __tablename__ = "vehicles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_number = Column(String(20), unique=True, nullable=False)
+    vehicle_type = Column(String(50))
+    capacity = Column(Integer)                             # 최대 적재량 (Kg)
+    notes = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DeliveryPhoto(Base):
+    __tablename__ = "delivery_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False)
+    photo_data = Column(Text, nullable=False)              # base64 인코딩
+    filename = Column(String(200))
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    delivery = relationship("Delivery", back_populates="photos")
