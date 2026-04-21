@@ -85,5 +85,22 @@ if db.query(models.Item).count() == 0:
 else:
     print("ℹ️  품목 데이터가 이미 존재합니다. 건너뜁니다.")
 
+# ── 고객사 ──────────────────────────────────────────────
+if db.query(models.Company).count() == 0:
+    print("초기 고객사 데이터를 생성합니다...")
+    seed_companies = [
+        {"name": "한화케미칼", "address": "서울시 중구"},
+        {"name": "LG화학", "address": "서울시 영등포구"},
+        {"name": "롯데케미칼", "address": "서울시 송파구"},
+        {"name": "SK이노베이션", "address": "서울시 종로구"},
+        {"name": "금호석유화학", "address": "서울시 강남구"},
+    ]
+    for c in seed_companies:
+        db.add(models.Company(name=c["name"], address=c["address"]))
+    db.commit()
+    print(f"✅ 고객사 {len(seed_companies)}개 생성 완료")
+else:
+    print("ℹ️  고객사 데이터가 이미 존재합니다. 건너뜁니다.")
+
 db.close()
 print("\n✅ 초기화 완료!")

@@ -33,6 +33,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .badge-departed { background: #dbeafe; color: #1e40af; }
 .badge-done     { background: #dcfce7; color: #166534; }
 .badge-cancel   { background: #fee2e2; color: #991b1b; }
+.badge-progress { background: #fed7aa; color: #9a3412; }
 
 /* ── 로그인 ── */
 #loginPage { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3a5f, #2563eb); }
@@ -228,6 +229,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     <button class="tab-btn" onclick="switchTab('drivers', this)">👷 기사 현황</button>
     <button class="tab-btn" onclick="switchTab('vehicles', this)">🚛 차량 관리</button>
     <button class="tab-btn" onclick="switchTab('items', this)">🗂️ 품목 관리</button>
+    <button class="tab-btn" onclick="switchTab('companies', this)">🏢 고객사 관리</button>
     <button class="tab-btn" onclick="switchTab('users', this)">⚙️ 사용자 관리</button>
   </div>
 
@@ -325,6 +327,16 @@ header h2 { font-size: 16px; font-weight: 700; }
       <div id="itemTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
 
+    <!-- 관리자: 고객사 관리 -->
+    <div id="tab-companies" class="hidden">
+      <div class="section-header">
+        <h3>고객사 관리</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddCompanyModal()">+ 고객사 추가</button>
+      </div>
+      <div class="info-box">💡 배송 할당 시 선택할 수 있는 고객사 목록을 관리합니다.</div>
+      <div id="companyTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
     <!-- 관리자: 사용자 관리 -->
     <div id="tab-users" class="hidden">
       <div class="section-header">
@@ -360,7 +372,9 @@ header h2 { font-size: 16px; font-weight: 700; }
       <div class="form-row">
         <div class="form-group">
           <label>업체명 *</label>
-          <input type="text" id="f-company" placeholder="예: 한화케미칼">
+          <select id="f-company">
+            <option value="">선택하세요</option>
+          </select>
         </div>
         <div class="form-group">
           <label>목적지 *</label>
@@ -557,6 +571,34 @@ header h2 { font-size: 16px; font-weight: 700; }
   </div>
 </div>
 
+<!-- 고객사 추가 모달 -->
+<div id="addCompanyModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🏢 고객사 추가</h3>
+      <button class="modal-close" onclick="closeModal('addCompanyModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>고객사명 *</label>
+        <input type="text" id="c-name" placeholder="예: 한화케미칼">
+      </div>
+      <div class="form-group">
+        <label>주소</label>
+        <input type="text" id="c-address" placeholder="예: 서울시 중구">
+      </div>
+      <div class="form-group">
+        <label>비고</label>
+        <input type="text" id="c-notes" placeholder="메모">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addCompanyModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAddCompany()">추가</button>
+    </div>
+  </div>
+</div>
+
 <!-- 사진 전체보기 -->
 <div id="photoViewModal" class="modal-overlay hidden" onclick="closeModal('photoViewModal')">
   <img id="photoViewImg" style="max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain;">
@@ -573,6 +615,7 @@ let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let drivers = [];
 let vehiclesList = [];
 let itemsList = [];
+let companiesList = [];
 let photoFiles = [];
 let currentActionId = null;
 let currentTab = '';
@@ -584,6 +627,15 @@ const STATUS_BADGE = {
   wait: 'badge-wait', loaded: 'badge-loaded', departed: 'badge-departed',
   done: 'badge-done', cancel: 'badge-cancel'
 };
+
+function cardBadgeLabel(status) {
+  if (status === 'loaded' || status === 'departed') return '진행중';
+  return STATUS_LABELS[status] || status;
+}
+function cardBadgeClass(status) {
+  if (status === 'loaded' || status === 'departed') return 'badge-progress';
+  return STATUS_BADGE[status] || '';
+}
 
 // ═══════════════════════════════════════════════════
 // API 유틸
@@ -670,7 +722,7 @@ async function initApp() {
     document.getElementById('adminTabs').classList.remove('hidden');
     document.getElementById('headerTitle').textContent = '관리자 대시보드';
     currentTab = 'dashboard';
-    await Promise.all([loadDrivers(), loadVehicles(), loadItems()]);
+    await Promise.all([loadDrivers(), loadVehicles(), loadItems(), loadCompanies()]);
     await loadDashboard();
   } else {
     document.getElementById('driverTabs').classList.remove('hidden');
@@ -686,7 +738,7 @@ if (token && currentUser) { initApp(); }
 // 탭 전환
 // ═══════════════════════════════════════════════════
 function switchTab(name, btn) {
-  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','users','myDeliveries','myHistory'];
+  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','companies','users','myDeliveries','myHistory'];
   allTabs.forEach(t => { const el = document.getElementById('tab-' + t); if (el) el.classList.add('hidden'); });
   document.getElementById('tab-' + name).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -698,6 +750,7 @@ function switchTab(name, btn) {
   else if (name === 'drivers')    loadDriverStatus();
   else if (name === 'vehicles')   loadVehicleTab();
   else if (name === 'items')      loadItemTab();
+  else if (name === 'companies')  loadCompanyTab();
   else if (name === 'users')      loadUsers();
   else if (name === 'myDeliveries') loadMyDeliveries();
   else if (name === 'myHistory')  loadMyHistory();
@@ -730,6 +783,15 @@ async function loadItems() {
     const sel = document.getElementById('f-item');
     sel.innerHTML = '<option value="">선택하세요</option>' +
       itemsList.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function loadCompanies() {
+  try {
+    companiesList = await api('GET', '/companies');
+    const sel = document.getElementById('f-company');
+    sel.innerHTML = '<option value="">선택하세요</option>' +
+      companiesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -836,6 +898,59 @@ async function deleteItem(id) {
     showToast('✅ 품목이 삭제되었습니다.');
     await loadItems();
     loadItemTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════
+// 고객사 탭
+// ═══════════════════════════════════════════════════
+async function loadCompanyTab() {
+  document.getElementById('companyTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const list = await api('GET', '/companies');
+    if (!list || list.length === 0) { document.getElementById('companyTableWrap').innerHTML = emptyMsg('등록된 고객사가 없습니다.'); return; }
+    const rows = list.map(c => `
+      <tr>
+        <td>${c.id}</td>
+        <td><strong>${c.name}</strong></td>
+        <td>${c.address || '-'}</td>
+        <td>${c.notes || '-'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">삭제</button></td>
+      </tr>`).join('');
+    document.getElementById('companyTableWrap').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>고객사명</th><th>주소</th><th>비고</th><th>관리</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) { showToast('⚠️ 고객사 로딩 실패'); }
+}
+
+function openAddCompanyModal() {
+  ['c-name','c-address','c-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('addCompanyModal').classList.remove('hidden');
+}
+
+async function submitAddCompany() {
+  const name    = document.getElementById('c-name').value.trim();
+  const address = document.getElementById('c-address').value.trim();
+  const notes   = document.getElementById('c-notes').value.trim();
+  if (!name) { showToast('⚠️ 고객사명을 입력해주세요.'); return; }
+  try {
+    await api('POST', '/companies', { name, address: address || null, notes: notes || null });
+    closeModal('addCompanyModal');
+    showToast('✅ 고객사가 추가되었습니다.');
+    await loadCompanies();
+    loadCompanyTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function deleteCompany(id) {
+  if (!confirm('이 고객사를 삭제하시겠습니까?')) return;
+  try {
+    await api('DELETE', `/companies/${id}`);
+    showToast('✅ 고객사가 삭제되었습니다.');
+    await loadCompanies();
+    loadCompanyTab();
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
@@ -956,7 +1071,7 @@ function deliveryCardHTML(d, mode) {
         <div class="card-id">D${String(d.id).padStart(3,'0')} · ${d.scheduled_date} ${d.delivery_time}</div>
         <div class="card-company">${d.company}</div>
       </div>
-      <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABELS[d.status]}</span>
+      <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
     </div>
     <div class="card-meta">
       <div><div class="meta-label">목적지</div><div class="meta-val">📍 ${d.destination}</div></div>
@@ -1091,7 +1206,7 @@ function renderDetail(d) {
         <div style="font-size:12px;color:#6b7280;">D${String(d.id).padStart(3,'0')}</div>
         <div style="font-size:20px;font-weight:800;color:#1e3a5f;">${d.company}</div>
       </div>
-      <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABELS[d.status]}</span>
+      <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
     </div>
     <div class="status-flow">${stepsHTML}</div>
 

@@ -3,6 +3,24 @@ from typing import Optional, List
 from datetime import datetime
 
 
+# ── Company (고객사) ──────────────────────────────────────
+class CompanyCreate(BaseModel):
+    name: str
+    address: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CompanyResponse(BaseModel):
+    id: int
+    name: str
+    address: Optional[str]
+    notes: Optional[str]
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 # ── Item (품목) ──────────────────────────────────────
 class ItemCreate(BaseModel):
     name: str

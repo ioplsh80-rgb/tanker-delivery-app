@@ -18,6 +18,18 @@ class User(Base):
     deliveries = relationship("Delivery", back_populates="driver_user", foreign_keys="[Delivery.driver_id]")
 
 
+class Company(Base):
+    """고객사 관리"""
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    address = Column(String(200))
+    notes = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Item(Base):
     """품목 관리"""
     __tablename__ = "items"
