@@ -25,7 +25,8 @@ router = APIRouter()
 STATUS_LABELS = {
     "wait":     "대기중",
     "loaded":   "상차완료",
-    "departed": "출발",
+    "driving":  "운행중",
+    "unloaded": "하차완료",
     "done":     "완료",
     "cancel":   "취소",
 }
@@ -80,15 +81,14 @@ def export_excel(
 
     # 헤더 (13열)
     headers = [
-        "번호", "업체명", "목적지", "품목", "수량(Kg)",
+        "번호", "유형", "업체명", "목적지", "품목", "수량(Kg)",
         "기사명", "차량번호", "배송날짜", "배송시간",
-        "상차완료", "출발", "완료시간", "상태", "특이사항",
+        "상차완료", "운행시작", "하차완료", "완료시간", "상태", "특이사항",
     ]
-    col_widths = [6, 16, 22, 20, 10, 10, 13, 13, 10, 10, 10, 10, 10, 26]
+    col_widths = [6, 8, 16, 22, 20, 10, 10, 13, 13, 10, 10, 10, 10, 10, 10, 26]
 
-    # 열 수가 14개이므로 머지 셀 범위 조정
-    ws.merge_cells("A1:N1")
-    ws.merge_cells("A2:N2")
+    ws.merge_cells("A1:P1")
+    ws.merge_cells("A2:P2")
 
     header_fill = PatternFill("solid", fgColor="1E3A5F")
     header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -113,6 +113,7 @@ def export_excel(
     for row_idx, d in enumerate(deliveries, 4):
         row_values = [
             row_idx - 3,
+            d.delivery_type or "출하",
             d.company,
             d.destination,
             d.item_name,
@@ -122,7 +123,8 @@ def export_excel(
             d.scheduled_date,
             d.delivery_time,
             d.loading_complete_time or "-",
-            d.departure_time or "-",
+            d.driving_time or "-",
+            d.unloaded_time or "-",
             d.complete_time or "-",
             STATUS_LABELS.get(d.status, d.status),
             d.notes or "",
@@ -204,8 +206,10 @@ def export_pdf(
         row("담당 기사", d.driver_user.name if d.driver_user else "-"),
         row("차량 번호", d.vehicle_number),
         row("배송 일시", f"{d.scheduled_date} {d.delivery_time}"),
+        row("배송 유형", d.delivery_type or "출하"),
         row("상차 완료", d.loading_complete_time),
-        row("출발", d.departure_time),
+        row("운행 시작", d.driving_time),
+        row("하차 완료", d.unloaded_time),
         row("완료 시간", d.complete_time),
         row("배송 상태", STATUS_LABELS.get(d.status, d.status)),
         row("특이사항", d.notes),

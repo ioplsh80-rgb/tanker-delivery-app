@@ -12,8 +12,16 @@ from routers.auth import get_current_user
 
 router = APIRouter()
 
-# 상태 진행 순서
-STATUS_FLOW = ["wait", "loaded", "departed", "done"]
+# 출하: 대기중→상차완료→운행→하차완료→완료(계근표)
+OUTBOUND_FLOW = ["wait", "loaded", "driving", "unloaded", "done"]
+# 입하: 대기중→운행→상차완료→완료(자동)
+INBOUND_FLOW  = ["wait", "driving", "loaded", "done"]
+
+ADMIN_ROLES = ("admin", "superadmin")
+
+
+def get_flow(delivery_type: str):
+    return OUTBOUND_FLOW if delivery_type == "출하" else INBOUND_FLOW
 
 
 @router.get("/", response_model=List[schemas.DeliveryResponse])
@@ -28,7 +36,6 @@ def get_deliveries(
 ):
     query = db.query(models.Delivery)
 
-    # 기사는 본인 배송만 조회
     if current_user.role == "driver":
         query = query.filter(models.Delivery.driver_id == current_user.id)
     else:
@@ -56,7 +63,7 @@ def create_delivery(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="관리자만 배송을 할당할 수 있습니다.")
 
     db_delivery = models.Delivery(**delivery.dict(), created_by=current_user.id)
@@ -93,8 +100,10 @@ def update_status(
         d.status = update.status
     if update.loading_complete_time:
         d.loading_complete_time = update.loading_complete_time
-    if update.departure_time:
-        d.departure_time = update.departure_time
+    if update.driving_time:
+        d.driving_time = update.driving_time
+    if update.unloaded_time:
+        d.unloaded_time = update.unloaded_time
     if update.complete_time:
         d.complete_time = update.complete_time
     if update.complete_memo is not None:
@@ -112,29 +121,43 @@ def revert_status(
     current_user: models.User = Depends(get_current_user),
 ):
     """관리자 전용: 상태를 이전 단계로 되돌리기"""
-    if current_user.role != "admin":
+    if current_user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="관리자만 상태를 되돌릴 수 있습니다.")
 
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
 
-    if d.status not in STATUS_FLOW:
+    flow = get_flow(d.delivery_type)
+
+    if d.status not in flow:
         raise HTTPException(status_code=400, detail="되돌릴 수 없는 상태입니다.")
 
-    idx = STATUS_FLOW.index(d.status)
+    idx = flow.index(d.status)
     if idx == 0:
         raise HTTPException(status_code=400, detail="이미 첫 번째 단계(대기중)입니다.")
 
-    prev_status = STATUS_FLOW[idx - 1]
+    prev_status = flow[idx - 1]
     d.status = prev_status
 
-    # 해당 단계 시간 초기화
+    # 이후 단계 시간 초기화
     if prev_status == "wait":
         d.loading_complete_time = None
+        d.driving_time = None
+        d.unloaded_time = None
+        d.complete_time = None
+        d.complete_memo = None
     elif prev_status == "loaded":
-        d.departure_time = None
-    elif prev_status == "departed":
+        d.driving_time = None
+        d.unloaded_time = None
+        d.complete_time = None
+        d.complete_memo = None
+    elif prev_status == "driving":
+        d.unloaded_time = None
+        d.loading_complete_time = None
+        d.complete_time = None
+        d.complete_memo = None
+    elif prev_status == "unloaded":
         d.complete_time = None
         d.complete_memo = None
 
@@ -154,7 +177,7 @@ async def upload_photos(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
-    if d.driver_id != current_user.id and current_user.role != "admin":
+    if d.driver_id != current_user.id and current_user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
     for file in files:
@@ -181,7 +204,7 @@ def delete_delivery(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있습니다.")
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:

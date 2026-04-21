@@ -15,6 +15,8 @@ db = SessionLocal()
 if db.query(models.User).count() == 0:
     print("초기 사용자 데이터를 생성합니다...")
     seed_users = [
+        # 슈퍼관리자 1명
+        {"name": "슈퍼관리자", "username": "superadmin", "password": "Super1234!", "role": "superadmin"},
         # 관리자 15명
         *[
             {"name": f"관리자{i:02d}", "username": f"admin{i:02d}",
@@ -42,6 +44,7 @@ if db.query(models.User).count() == 0:
         ))
     db.commit()
     print(f"✅ 사용자 {len(seed_users)}명 생성 완료")
+    print("   슈퍼관리자: superadmin / 비밀번호: Super1234!")
     print("   관리자: admin01~admin15 / 비밀번호: Admin1234!")
     print("   기사:   driver01~driver10 / 비밀번호: Driver1234!")
 else:

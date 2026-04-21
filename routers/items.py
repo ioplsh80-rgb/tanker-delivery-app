@@ -29,8 +29,8 @@ def create_item(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="관리자만 품목을 추가할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 품목을 추가할 수 있습니다.")
     existing = db.query(models.Item).filter(models.Item.name == item.name).first()
     if existing:
         if existing.is_active:
@@ -53,8 +53,8 @@ def delete_item(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="관리자만 품목을 삭제할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 품목을 삭제할 수 있습니다.")
     item = db.query(models.Item).filter(models.Item.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="품목을 찾을 수 없습니다.")

@@ -371,12 +371,21 @@ header h2 { font-size: 16px; font-weight: 700; }
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group">
+          <label>배송 유형 *</label>
+          <select id="f-type">
+            <option value="출하">출하 (제품 배송)</option>
+            <option value="입하">입하 (원료 수령)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>업체명 *</label>
           <select id="f-company">
             <option value="">선택하세요</option>
           </select>
         </div>
-        <div class="form-group">
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="grid-column:1/-1">
           <label>목적지 *</label>
           <input type="text" id="f-dest" placeholder="예: 울산시 남구 삼산동">
         </div>
@@ -621,19 +630,20 @@ let currentActionId = null;
 let currentTab = '';
 
 const STATUS_LABELS = {
-  wait: '대기중', loaded: '상차완료', departed: '출발', done: '완료', cancel: '취소'
+  wait: '대기중', loaded: '상차완료', driving: '운행중', unloaded: '하차완료',
+  done: '완료', cancel: '취소'
 };
 const STATUS_BADGE = {
-  wait: 'badge-wait', loaded: 'badge-loaded', departed: 'badge-departed',
-  done: 'badge-done', cancel: 'badge-cancel'
+  wait: 'badge-wait', loaded: 'badge-loaded', driving: 'badge-departed',
+  unloaded: 'badge-loaded', done: 'badge-done', cancel: 'badge-cancel'
 };
 
 function cardBadgeLabel(status) {
-  if (status === 'loaded' || status === 'departed') return '진행중';
+  if (['loaded','driving','unloaded'].includes(status)) return '진행중';
   return STATUS_LABELS[status] || status;
 }
 function cardBadgeClass(status) {
-  if (status === 'loaded' || status === 'departed') return 'badge-progress';
+  if (['loaded','driving','unloaded'].includes(status)) return 'badge-progress';
   return STATUS_BADGE[status] || '';
 }
 
@@ -718,11 +728,18 @@ async function initApp() {
   document.getElementById('appPage').classList.remove('hidden');
   document.getElementById('headerUser').textContent = currentUser.name;
 
-  if (currentUser.role === 'admin') {
+  if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
     document.getElementById('adminTabs').classList.remove('hidden');
-    document.getElementById('headerTitle').textContent = '관리자 대시보드';
+    document.getElementById('headerTitle').textContent = currentUser.role === 'superadmin' ? '슈퍼관리자 대시보드' : '관리자 대시보드';
     currentTab = 'dashboard';
     await Promise.all([loadDrivers(), loadVehicles(), loadItems(), loadCompanies()]);
+    // 일반 관리자는 관리 탭 숨기기
+    if (currentUser.role !== 'superadmin') {
+      ['vehicles','items','companies','users'].forEach(t => {
+        const btn = document.querySelector(`[onclick="switchTab('${t}', this)"]`);
+        if (btn) btn.style.display = 'none';
+      });
+    }
     await loadDashboard();
   } else {
     document.getElementById('driverTabs').classList.remove('hidden');
@@ -1068,7 +1085,7 @@ function deliveryCardHTML(d, mode) {
   <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
     <div class="card-header">
       <div>
-        <div class="card-id">D${String(d.id).padStart(3,'0')} · ${d.scheduled_date} ${d.delivery_time}</div>
+        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${d.scheduled_date} ${d.delivery_time}</div>
         <div class="card-company">${d.company}</div>
       </div>
       <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
@@ -1084,27 +1101,48 @@ function deliveryCardHTML(d, mode) {
 }
 
 function buildCardActions(d, mode) {
+  const isOut = (d.delivery_type || '출하') === '출하';
+  const revert = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
+
   if (mode === 'admin') {
     let btns = '';
     if (d.status === 'wait')
       btns = `<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
-    if (d.status === 'loaded')
-      btns = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
-              <button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'departed')">🚛 출발 처리</button>`;
-    if (d.status === 'departed')
-      btns = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
-              <button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">✅ 완료 처리</button>`;
-    if (d.status === 'done')
+    if (isOut) {
+      if (d.status === 'loaded')
+        btns = `${revert}<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`;
+      if (d.status === 'driving')
+        btns = `${revert}<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'unloaded')">📥 하차완료 처리</button>`;
+      if (d.status === 'unloaded')
+        btns = `${revert}<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">✅ 완료 처리</button>`;
+    } else {
+      if (d.status === 'driving')
+        btns = `${revert}<button class="btn btn-purple btn-sm" onclick="changeStatus(${d.id},'loaded')">📦 상차완료 처리</button>`;
+      if (d.status === 'loaded')
+        btns = `${revert}<button class="btn btn-success btn-sm" onclick="changeStatus(${d.id},'done')">✅ 완료 처리</button>`;
+    }
+    if (d.status === 'done' && isOut)
       btns = `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
     return btns;
   } else {
-    if (d.status === 'wait')
-      return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-    if (d.status === 'loaded')
-      return `<button class="btn btn-primary btn-sm" onclick="confirmDeparture(${d.id})">🚛 출발</button>`;
-    if (d.status === 'departed')
-      return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-    if (d.status === 'done')
+    if (isOut) {
+      if (d.status === 'wait')
+        return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+      if (d.status === 'loaded')
+        return `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
+      if (d.status === 'driving')
+        return `<button class="btn btn-primary btn-sm" onclick="confirmUnloaded(${d.id})">📥 하차 완료</button>`;
+      if (d.status === 'unloaded')
+        return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+    } else {
+      if (d.status === 'wait')
+        return `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
+      if (d.status === 'driving')
+        return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+      if (d.status === 'loaded')
+        return `<button class="btn btn-success btn-sm" onclick="confirmInboundDone(${d.id})">🏁 하차 완료 (완료)</button>`;
+    }
+    if (d.status === 'done' && isOut)
       return `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
   }
   return '';
@@ -1118,8 +1156,10 @@ async function changeStatus(id, status) {
   if (!confirm(`"${label}"으로 처리하시겠습니까?`)) return;
   try {
     const body = { status };
-    if (status === 'departed') body.departure_time = nowTime();
-    if (status === 'done')     body.complete_time  = nowTime();
+    if (status === 'loaded')   body.loading_complete_time = nowTime();
+    if (status === 'driving')  body.driving_time  = nowTime();
+    if (status === 'unloaded') body.unloaded_time = nowTime();
+    if (status === 'done')     body.complete_time = nowTime();
     await api('PATCH', `/deliveries/${id}/status`, body);
     showToast(`"${label}"으로 변경되었습니다.`);
     refreshCurrentTab();
@@ -1156,14 +1196,31 @@ async function confirmLoaded(id) {
 // ═══════════════════════════════════════════════════
 // 출발 처리 (기사)
 // ═══════════════════════════════════════════════════
-async function confirmDeparture(id) {
-  if (!confirm('출발 처리하시겠습니까?')) return;
+async function confirmDriving(id) {
+  if (!confirm('운행 처리하시겠습니까?')) return;
   try {
-    await api('PATCH', `/deliveries/${id}/status`, {
-      status: 'departed',
-      departure_time: nowTime(),
-    });
-    showToast('🚛 출발 처리되었습니다.');
+    await api('PATCH', `/deliveries/${id}/status`, { status: 'driving', driving_time: nowTime() });
+    showToast('🚛 운행 처리되었습니다.');
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function confirmUnloaded(id) {
+  if (!confirm('하차 완료 처리하시겠습니까?')) return;
+  try {
+    await api('PATCH', `/deliveries/${id}/status`, { status: 'unloaded', unloaded_time: nowTime() });
+    showToast('📥 하차 완료 처리되었습니다.');
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function confirmInboundDone(id) {
+  if (!confirm('하차 완료 처리하시겠습니까?\n(입하 완료로 처리됩니다)')) return;
+  try {
+    await api('PATCH', `/deliveries/${id}/status`, { status: 'done', complete_time: nowTime() });
+    showToast('🏁 입하 완료 처리되었습니다.');
     refreshCurrentTab();
     closeModal('detailModal');
   } catch (e) { showToast('⚠️ ' + e.message); }
@@ -1185,8 +1242,13 @@ async function openDetail(id) {
 }
 
 function renderDetail(d) {
-  const steps = ['wait', 'loaded', 'departed', 'done'];
-  const stepLabels = ['대기중', '상차완료', '출발', '완료'];
+  const isOut = (d.delivery_type || '출하') === '출하';
+  const steps = isOut
+    ? ['wait','loaded','driving','unloaded','done']
+    : ['wait','driving','loaded','done'];
+  const stepLabels = isOut
+    ? ['대기중','상차완료','운행중','하차완료','완료']
+    : ['대기중','운행중','상차완료','완료'];
   const curIdx = steps.indexOf(d.status === 'cancel' ? 'wait' : d.status);
 
   const stepsHTML = steps.map((s, i) => {
@@ -1233,7 +1295,8 @@ function renderDetail(d) {
       <h4>시간 기록</h4>
       <div class="detail-grid">
         <div><div class="di-label">상차 완료</div><div class="di-val">${d.loading_complete_time || '-'}</div></div>
-        <div><div class="di-label">출발</div><div class="di-val">${d.departure_time || '-'}</div></div>
+        <div><div class="di-label">운행 시작</div><div class="di-val">${d.driving_time || '-'}</div></div>
+        <div><div class="di-label">하차 완료</div><div class="di-val">${d.unloaded_time || '-'}</div></div>
         <div><div class="di-label">완료</div><div class="di-val">${d.complete_time || '-'}</div></div>
       </div>
     </div>
@@ -1249,22 +1312,41 @@ function renderDetail(d) {
   if (d.status === 'done')
     footer += `<button class="btn btn-outline" onclick="downloadPDF(${d.id})">📄 계근표 PDF</button>`;
 
-  if (currentUser.role === 'admin') {
+  if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+    const rv = `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
     if (d.status === 'wait')
       footer += `<button class="btn btn-danger" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
-    if (d.status === 'loaded')
-      footer += `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
-                 <button class="btn btn-primary" onclick="changeStatus(${d.id},'departed')">🚛 출발 처리</button>`;
-    if (d.status === 'departed')
-      footer += `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>
-                 <button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">✅ 완료 처리</button>`;
+    if (isOut) {
+      if (d.status === 'loaded')
+        footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`;
+      if (d.status === 'driving')
+        footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'unloaded')">📥 하차완료</button>`;
+      if (d.status === 'unloaded')
+        footer += `${rv}<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">✅ 완료 처리</button>`;
+    } else {
+      if (d.status === 'driving')
+        footer += `${rv}<button class="btn btn-purple" onclick="changeStatus(${d.id},'loaded')">📦 상차완료</button>`;
+      if (d.status === 'loaded')
+        footer += `${rv}<button class="btn btn-success" onclick="changeStatus(${d.id},'done')">✅ 완료 처리</button>`;
+    }
   } else {
-    if (d.status === 'wait')
-      footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-    if (d.status === 'loaded')
-      footer += `<button class="btn btn-primary" onclick="confirmDeparture(${d.id})">🚛 출발</button>`;
-    if (d.status === 'departed')
-      footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+    if (isOut) {
+      if (d.status === 'wait')
+        footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+      if (d.status === 'loaded')
+        footer += `<button class="btn btn-primary" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
+      if (d.status === 'driving')
+        footer += `<button class="btn btn-primary" onclick="confirmUnloaded(${d.id})">📥 하차 완료</button>`;
+      if (d.status === 'unloaded')
+        footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+    } else {
+      if (d.status === 'wait')
+        footer += `<button class="btn btn-primary" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
+      if (d.status === 'driving')
+        footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+      if (d.status === 'loaded')
+        footer += `<button class="btn btn-success" onclick="confirmInboundDone(${d.id})">🏁 하차 완료 (완료)</button>`;
+    }
   }
   document.getElementById('detailFooter').innerHTML = footer;
 }
@@ -1274,7 +1356,9 @@ function renderDetail(d) {
 // ═══════════════════════════════════════════════════
 function openAssignModal() {
   const today = new Date().toISOString().slice(0, 10);
-  ['f-company','f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
+  ['f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-type').value = '출하';
+  document.getElementById('f-company').value = '';
   document.getElementById('f-item').value = '';
   document.getElementById('f-qty').value = '';
   document.getElementById('f-driver').value = '';
@@ -1285,7 +1369,8 @@ function openAssignModal() {
 }
 
 async function submitAssign() {
-  const company  = document.getElementById('f-company').value.trim();
+  const deliveryType = document.getElementById('f-type').value;
+  const company  = document.getElementById('f-company').value;
   const dest     = document.getElementById('f-dest').value.trim();
   const item     = document.getElementById('f-item').value;
   const qty      = parseInt(document.getElementById('f-qty').value);
@@ -1305,7 +1390,7 @@ async function submitAssign() {
     await api('POST', '/deliveries/', {
       company, destination: dest, item_name: item, quantity: qty,
       driver_id: parseInt(driverId), vehicle_number: vehicle,
-      scheduled_date: date, delivery_time: time, notes: note,
+      scheduled_date: date, delivery_time: time, delivery_type: deliveryType, notes: note,
     });
     closeModal('assignModal');
     showToast('✅ 배송이 할당되었습니다.');

@@ -15,8 +15,8 @@ def get_all_users(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="관리자만 접근 가능합니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 접근 가능합니다.")
     return db.query(models.User).filter(models.User.is_active == True).all()
 
 
@@ -38,8 +38,8 @@ def create_user(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="관리자만 사용자를 생성할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 사용자를 생성할 수 있습니다.")
     if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디입니다.")
 
@@ -79,8 +79,8 @@ def deactivate_user(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="관리자만 비활성화할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 비활성화할 수 있습니다.")
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")

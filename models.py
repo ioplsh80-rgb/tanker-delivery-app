@@ -53,14 +53,18 @@ class Delivery(Base):
     scheduled_date = Column(String(10), nullable=False)     # 배송 날짜
     delivery_time = Column(String(5), nullable=False)       # 배송 시간
 
+    delivery_type = Column(String(10), default="출하")       # 출하 / 입하
     notes = Column(Text)                                    # 특이사항
 
-    # 상태: wait / loaded / departed / done / cancel
+    # 상태: wait / loaded / driving / unloaded / done / cancel
+    # 출하: wait→loaded→driving→unloaded→done
+    # 입하: wait→driving→loaded→done
     status = Column(String(10), default="wait")
 
     # 단계별 시간 기록
     loading_complete_time = Column(String(5))  # 상차 완료
-    departure_time = Column(String(5))         # 출발
+    driving_time = Column(String(5))           # 운행 시작
+    unloaded_time = Column(String(5))          # 하차 완료
     complete_time = Column(String(5))          # 완료
     complete_memo = Column(Text)
 

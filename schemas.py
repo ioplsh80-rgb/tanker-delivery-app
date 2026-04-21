@@ -71,13 +71,15 @@ class DeliveryCreate(BaseModel):
     vehicle_number: Optional[str] = None
     scheduled_date: str
     delivery_time: str                      # 배송시간
+    delivery_type: str = "출하"             # 출하 / 입하
     notes: Optional[str] = None
 
 
 class DeliveryUpdate(BaseModel):
     status: Optional[str] = None
     loading_complete_time: Optional[str] = None
-    departure_time: Optional[str] = None
+    driving_time: Optional[str] = None
+    unloaded_time: Optional[str] = None
     complete_time: Optional[str] = None
     complete_memo: Optional[str] = None
 
@@ -102,10 +104,12 @@ class DeliveryResponse(BaseModel):
     vehicle_number: Optional[str]
     scheduled_date: str
     delivery_time: str
+    delivery_type: str = "출하"
     notes: Optional[str]
     status: str
     loading_complete_time: Optional[str]
-    departure_time: Optional[str]
+    driving_time: Optional[str]
+    unloaded_time: Optional[str]
     complete_time: Optional[str]
     complete_memo: Optional[str]
     created_at: datetime
