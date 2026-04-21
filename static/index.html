@@ -845,7 +845,7 @@ async function deleteItem(id) {
 async function loadDashboard() {
   const today = new Date().toISOString().slice(0, 10);
   try {
-    const list = await api('GET', `/deliveries?date=${today}`);
+    const list = await api('GET', `/deliveries/?date=${today}`);
     document.getElementById('stat-wait').textContent     = list.filter(d => d.status === 'wait').length;
     document.getElementById('stat-loaded').textContent   = list.filter(d => d.status === 'loaded').length;
     document.getElementById('stat-departed').textContent = list.filter(d => d.status === 'departed').length;
@@ -876,7 +876,7 @@ async function loadDeliveries() {
   if (dateTo)   qs.append('date_to', dateTo);
   document.getElementById('deliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
-    const list = await api('GET', '/deliveries?' + qs.toString());
+    const list = await api('GET', '/deliveries/?' + qs.toString());
     document.getElementById('deliveryList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('배송 내역이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
@@ -887,7 +887,7 @@ async function loadDeliveries() {
 async function loadDriverStatus() {
   const today = new Date().toISOString().slice(0, 10);
   try {
-    const list = await api('GET', `/deliveries?date=${today}`);
+    const list = await api('GET', `/deliveries/?date=${today}`);
     const html = drivers.map(dr => {
       const myD     = list.filter(d => d.driver_id === dr.id);
       const active  = myD.find(d => d.status === 'loaded' || d.status === 'departed');
@@ -924,7 +924,7 @@ async function loadMyDeliveries() {
   document.getElementById('myDeliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const list = await api('GET', `/deliveries?date=${today}`);
+    const list = await api('GET', `/deliveries/?date=${today}`);
     const active = list.filter(d => d.status !== 'done' && d.status !== 'cancel');
     document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('배정된 배송이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
@@ -933,7 +933,7 @@ async function loadMyDeliveries() {
 async function loadMyHistory() {
   document.getElementById('myHistoryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
-    const list = await api('GET', '/deliveries?status=done');
+    const list = await api('GET', '/deliveries/?status=done');
     document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driver') || emptyMsg('완료된 배송이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
@@ -1187,7 +1187,7 @@ async function submitAssign() {
   const btn = document.getElementById('assignBtn');
   btn.disabled = true; btn.textContent = '처리 중...';
   try {
-    await api('POST', '/deliveries', {
+    await api('POST', '/deliveries/', {
       company, destination: dest, item_name: item, quantity: qty,
       driver_id: parseInt(driverId), vehicle_number: vehicle,
       scheduled_date: date, delivery_time: time, notes: note,
