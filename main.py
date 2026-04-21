@@ -9,7 +9,7 @@ from routers import auth, deliveries, users, exports, vehicles, items
 # DB 테이블 생성
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="탱크로리 배송 관리 시스템", version="1.0.0")
+app = FastAPI(title="탱크로리 배송 관리 시스템", version="1.0.0", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
