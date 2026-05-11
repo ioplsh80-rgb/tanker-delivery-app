@@ -15,12 +15,14 @@ db = SessionLocal()
 if db.query(models.User).count() == 0:
     print("초기 사용자 데이터를 생성합니다...")
     seed_users = [
-        # 슈퍼관리자 1명
-        {"name": "슈퍼관리자", "username": "superadmin", "password": "Super1234!", "role": "superadmin"},
-        # 관리자 15명
+        # 슈퍼관리자 1명 (모든 권한)
+        {"name": "슈퍼관리자", "username": "superadmin", "password": "Super1234!", "role": "superadmin",
+         "can_create_delivery": True, "can_assign_vehicle": True},
+        # 관리자 15명 (두 권한 모두 부여)
         *[
             {"name": f"관리자{i:02d}", "username": f"admin{i:02d}",
-             "password": "Admin1234!", "role": "admin"}
+             "password": "Admin1234!", "role": "admin",
+             "can_create_delivery": True, "can_assign_vehicle": True}
             for i in range(1, 16)
         ],
         # 배송기사 10명 (차량은 배송 할당 시 별도 지정)
@@ -41,6 +43,8 @@ if db.query(models.User).count() == 0:
             username=u["username"],
             password_hash=get_password_hash(u["password"]),
             role=u["role"],
+            can_create_delivery=u.get("can_create_delivery", False),
+            can_assign_vehicle=u.get("can_assign_vehicle", False),
         ))
     db.commit()
     print(f"✅ 사용자 {len(seed_users)}명 생성 완료")

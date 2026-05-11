@@ -11,7 +11,9 @@ class User(Base):
     name = Column(String(50), nullable=False)
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
-    role = Column(String(10), nullable=False)          # admin / driver
+    role = Column(String(10), nullable=False)          # superadmin / admin / driver
+    can_create_delivery = Column(Boolean, default=False)  # 배송정보 입력 권한
+    can_assign_vehicle = Column(Boolean, default=False)   # 배차 권한
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -48,7 +50,7 @@ class Delivery(Base):
     destination = Column(String(200), nullable=False)       # 목적지
     item_name = Column(String(100), nullable=False)         # 품목
     quantity = Column(Integer, nullable=False)              # 수량 (Kg)
-    driver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    driver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     vehicle_number = Column(String(20))                     # 차량번호 (배송마다 별도 지정)
     scheduled_date = Column(String(10), nullable=False)     # 배송 날짜
     delivery_time = Column(String(5), nullable=False)       # 배송 시간

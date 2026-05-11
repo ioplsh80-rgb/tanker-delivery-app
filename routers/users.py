@@ -48,6 +48,8 @@ def create_user(
         username=user.username,
         password_hash=get_password_hash(user.password),
         role=user.role,
+        can_create_delivery=user.can_create_delivery,
+        can_assign_vehicle=user.can_assign_vehicle,
     )
     db.add(db_user)
     db.commit()
@@ -69,6 +71,26 @@ def change_password(
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     user.password_hash = get_password_hash(body.get("password", ""))
+    db.commit()
+    return {"success": True}
+
+
+@router.patch("/{user_id}/permissions")
+def update_permissions(
+    user_id: int,
+    body: schemas.UserPermissionUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 권한을 변경할 수 있습니다.")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if body.can_create_delivery is not None:
+        user.can_create_delivery = body.can_create_delivery
+    if body.can_assign_vehicle is not None:
+        user.can_assign_vehicle = body.can_assign_vehicle
     db.commit()
     return {"success": True}
 

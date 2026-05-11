@@ -267,7 +267,7 @@ header h2 { font-size: 16px; font-weight: 700; }
       </div>
       <div class="section-header">
         <h3>오늘의 배송 현황</h3>
-        <button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ 배송 할당</button>
+        <button class="btn btn-primary btn-sm" id="btnOpenAssign" onclick="openAssignModal()">+ 배송 카드 생성</button>
       </div>
       <div class="delivery-list" id="dashboardList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
@@ -276,7 +276,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     <div id="tab-deliveries" class="hidden">
       <div class="section-header">
         <h3>배송 목록</h3>
-        <button class="btn btn-primary btn-sm" onclick="openAssignModal()">+ 배송 할당</button>
+        <button class="btn btn-primary btn-sm" id="btnOpenAssign2" onclick="openAssignModal()">+ 배송 카드 생성</button>
       </div>
       <div class="download-bar">
         <span>📥 다운로드</span>
@@ -403,21 +403,6 @@ header h2 { font-size: 16px; font-weight: 700; }
           <input type="number" id="f-qty" placeholder="예: 5000" min="1">
         </div>
       </div>
-      <div class="form-section-title">배송 담당</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>담당 기사 *</label>
-          <select id="f-driver">
-            <option value="">선택하세요</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>차량 번호 *</label>
-          <select id="f-vehicle">
-            <option value="">선택하세요</option>
-          </select>
-        </div>
-      </div>
       <div class="form-row">
         <div class="form-group">
           <label>배송 날짜 *</label>
@@ -436,6 +421,37 @@ header h2 { font-size: 16px; font-weight: 700; }
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('assignModal')">취소</button>
       <button class="btn btn-primary" onclick="submitAssign()" id="assignBtn">배송 할당</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 배차 모달 ══ -->
+<div id="assignVehicleModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🚛 배차 등록</h3>
+      <button class="modal-close" onclick="closeModal('assignVehicleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="assignVehicleInfo" style="background:#f0f4ff;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#374151;"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>담당 기사 *</label>
+          <select id="av-driver">
+            <option value="">선택하세요</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>차량 번호 *</label>
+          <select id="av-vehicle">
+            <option value="">선택하세요</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('assignVehicleModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAssignVehicle()" id="assignVehicleBtn">배차 등록</button>
     </div>
   </div>
 </div>
@@ -510,6 +526,15 @@ header h2 { font-size: 16px; font-weight: 700; }
             <option value="admin">관리자</option>
           </select>
         </div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:8px;">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">권한 설정</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="u-can-create"> 배송정보 입력 권한 (배송 카드 생성)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="u-can-assign"> 배차 권한 (기사/차량 배정)
+        </label>
       </div>
     </div>
     <div class="modal-footer">
@@ -628,6 +653,7 @@ let companiesList = [];
 let photoFiles = [];
 let currentActionId = null;
 let currentTab = '';
+let deliveriesCache = {};
 
 const STATUS_LABELS = {
   wait: '대기중', loaded: '상차완료', driving: '운행중', unloaded: '하차완료',
@@ -740,6 +766,12 @@ async function initApp() {
         if (btn) btn.style.display = 'none';
       });
     }
+    // 배송 카드 생성 버튼: can_create_delivery 또는 superadmin만 표시
+    const canCreate = currentUser.role === 'superadmin' || currentUser.can_create_delivery;
+    ['btnOpenAssign','btnOpenAssign2'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = canCreate ? '' : 'none';
+    });
     await loadDashboard();
   } else {
     document.getElementById('driverTabs').classList.remove('hidden');
@@ -1075,6 +1107,7 @@ async function loadMyHistory() {
 // ═══════════════════════════════════════════════════
 function renderDeliveryCards(list, mode) {
   if (!list || list.length === 0) return '';
+  list.forEach(d => { deliveriesCache[d.id] = d; });
   return list.map(d => deliveryCardHTML(d, mode)).join('');
 }
 
@@ -1094,7 +1127,7 @@ function deliveryCardHTML(d, mode) {
       <div><div class="meta-label">목적지</div><div class="meta-val">📍 ${d.destination}</div></div>
       <div><div class="meta-label">품목</div><div class="meta-val">🗂️ ${d.item_name}</div></div>
       <div><div class="meta-label">수량</div><div class="meta-val">${Number(d.quantity).toLocaleString()} Kg</div></div>
-      <div><div class="meta-label">기사 / 차량</div><div class="meta-val">👷 ${driverName} · ${d.vehicle_number || '-'}</div></div>
+      <div><div class="meta-label">기사 / 차량</div><div class="meta-val">${d.driver_id ? `👷 ${driverName} · ${d.vehicle_number || '-'}` : '<span style="color:#ef4444;font-weight:600;">⚠️ 배차 미등록</span>'}</div></div>
     </div>
     ${actions ? `<div class="card-footer" onclick="event.stopPropagation()">${actions}</div>` : ''}
   </div>`;
@@ -1106,8 +1139,11 @@ function buildCardActions(d, mode) {
 
   if (mode === 'admin') {
     let btns = '';
-    if (d.status === 'wait')
-      btns = `<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
+    // 배차 미등록 카드에 배차 버튼 표시
+    if (!d.driver_id && currentUser && (currentUser.role === 'superadmin' || currentUser.can_assign_vehicle))
+      btns = `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssignVehicleModal(${d.id})">🚛 배차 등록</button>`;
+    if (d.status === 'wait' && d.driver_id)
+      btns += `<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
     if (isOut) {
       if (d.status === 'loaded')
         btns = `${revert}<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`;
@@ -1309,8 +1345,12 @@ function renderDetail(d) {
   `;
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
-  if (d.status === 'done')
+  if (d.status === 'done' && isOut)
     footer += `<button class="btn btn-outline" onclick="downloadPDF(${d.id})">📄 계근표 PDF</button>`;
+
+  // 배차 버튼 (배차 권한자)
+  if ((currentUser.role === 'superadmin' || currentUser.can_assign_vehicle) && d.status !== 'done' && d.status !== 'cancel')
+    footer += `<button class="btn btn-primary" onclick="closeModal('detailModal');openAssignVehicleModal(${d.id})">🚛 배차 ${d.driver_id ? '변경' : '등록'}</button>`;
 
   if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
     const rv = `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
@@ -1361,8 +1401,6 @@ function openAssignModal() {
   document.getElementById('f-company').value = '';
   document.getElementById('f-item').value = '';
   document.getElementById('f-qty').value = '';
-  document.getElementById('f-driver').value = '';
-  document.getElementById('f-vehicle').value = '';
   document.getElementById('f-date').value = today;
   document.getElementById('f-time').value = '09:00';
   document.getElementById('assignModal').classList.remove('hidden');
@@ -1374,13 +1412,11 @@ async function submitAssign() {
   const dest     = document.getElementById('f-dest').value.trim();
   const item     = document.getElementById('f-item').value;
   const qty      = parseInt(document.getElementById('f-qty').value);
-  const driverId = document.getElementById('f-driver').value;
-  const vehicle  = document.getElementById('f-vehicle').value;
   const date     = document.getElementById('f-date').value;
   const time     = document.getElementById('f-time').value;
   const note     = document.getElementById('f-note').value.trim();
 
-  if (!company || !dest || !item || !qty || !driverId || !vehicle || !date || !time) {
+  if (!company || !dest || !item || !qty || !date || !time) {
     showToast('⚠️ 필수 항목을 모두 입력해주세요.'); return;
   }
 
@@ -1389,7 +1425,6 @@ async function submitAssign() {
   try {
     await api('POST', '/deliveries/', {
       company, destination: dest, item_name: item, quantity: qty,
-      driver_id: parseInt(driverId), vehicle_number: vehicle,
       scheduled_date: date, delivery_time: time, delivery_type: deliveryType, notes: note,
     });
     closeModal('assignModal');
@@ -1399,6 +1434,48 @@ async function submitAssign() {
     showToast('⚠️ ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = '배송 할당';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// 배차 등록
+// ═══════════════════════════════════════════════════
+let currentAssignId = null;
+
+function openAssignVehicleModal(id) {
+  currentAssignId = id;
+  const d = deliveriesCache[id] || {};
+  document.getElementById('assignVehicleInfo').innerHTML =
+    `<b>D${String(id).padStart(3,'0')}</b> · ${d.company||''} → ${d.destination||''}<br>` +
+    `${d.scheduled_date||''} ${d.delivery_time||''} · ${d.item_name||''} ${Number(d.quantity||0).toLocaleString()}Kg`;
+  const driverSel = document.getElementById('av-driver');
+  driverSel.innerHTML = '<option value="">선택하세요</option>' +
+    drivers.map(dr => `<option value="${dr.id}">${dr.name}</option>`).join('');
+  const vehicleSel = document.getElementById('av-vehicle');
+  vehicleSel.innerHTML = '<option value="">선택하세요</option>' +
+    vehiclesList.map(v => `<option value="${v.vehicle_number}">${v.vehicle_number} · ${v.vehicle_type||''}</option>`).join('');
+  if (d.driver_id) driverSel.value = d.driver_id;
+  if (d.vehicle_number) vehicleSel.value = d.vehicle_number;
+  document.getElementById('assignVehicleModal').classList.remove('hidden');
+}
+
+async function submitAssignVehicle() {
+  const driverId = document.getElementById('av-driver').value;
+  const vehicle  = document.getElementById('av-vehicle').value;
+  if (!driverId || !vehicle) { showToast('⚠️ 기사와 차량을 모두 선택해주세요.'); return; }
+  const btn = document.getElementById('assignVehicleBtn');
+  btn.disabled = true; btn.textContent = '처리 중...';
+  try {
+    await api('PATCH', `/deliveries/${currentAssignId}/assign`, {
+      driver_id: parseInt(driverId), vehicle_number: vehicle,
+    });
+    closeModal('assignVehicleModal');
+    showToast('✅ 배차가 등록되었습니다.');
+    refreshCurrentTab();
+  } catch (e) {
+    showToast('⚠️ ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '배차 등록';
   }
 }
 
@@ -1472,18 +1549,26 @@ async function loadUsers() {
   document.getElementById('userTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const users = await api('GET', '/users/');
+    const roleLabel = {superadmin:'슈퍼관리자', admin:'관리자', driver:'기사'};
+    const roleBadge = {superadmin:'badge-done', admin:'badge-departed', driver:'badge-wait'};
     const rows = users.map(u => `
       <tr>
         <td>${u.id}</td>
         <td>${u.name}</td>
         <td>${u.username}</td>
-        <td><span class="badge ${u.role === 'admin' ? 'badge-departed' : 'badge-wait'}">${u.role === 'admin' ? '관리자' : '기사'}</span></td>
+        <td><span class="badge ${roleBadge[u.role]||'badge-wait'}">${roleLabel[u.role]||u.role}</span></td>
+        <td style="text-align:center;">
+          <input type="checkbox" ${u.can_create_delivery?'checked':''} onchange="updatePermission(${u.id},'can_create_delivery',this.checked)" ${u.role==='superadmin'?'disabled':''}>
+        </td>
+        <td style="text-align:center;">
+          <input type="checkbox" ${u.can_assign_vehicle?'checked':''} onchange="updatePermission(${u.id},'can_assign_vehicle',this.checked)" ${u.role==='superadmin'?'disabled':''}>
+        </td>
         <td><span style="color:#16a34a;font-weight:600;">활성</span></td>
       </tr>
     `).join('');
     document.getElementById('userTableWrap').innerHTML = `
       <table class="data-table">
-        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th><th>상태</th></tr></thead>
+        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th><th>배송정보 권한</th><th>배차 권한</th><th>상태</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   } catch (e) { showToast('⚠️ 사용자 로딩 실패'); }
@@ -1492,7 +1577,16 @@ async function loadUsers() {
 function openAddUserModal() {
   ['u-name','u-username','u-password'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('u-role').value = 'driver';
+  document.getElementById('u-can-create').checked = false;
+  document.getElementById('u-can-assign').checked = false;
   document.getElementById('addUserModal').classList.remove('hidden');
+}
+
+async function updatePermission(userId, field, value) {
+  try {
+    await api('PATCH', `/users/${userId}/permissions`, { [field]: value });
+    showToast('✅ 권한이 변경되었습니다.');
+  } catch (e) { showToast('⚠️ ' + e.message); loadUsers(); }
 }
 
 async function submitAddUser() {
@@ -1500,9 +1594,11 @@ async function submitAddUser() {
   const username = document.getElementById('u-username').value.trim();
   const password = document.getElementById('u-password').value;
   const role     = document.getElementById('u-role').value;
+  const canCreate = document.getElementById('u-can-create')?.checked || false;
+  const canAssign = document.getElementById('u-can-assign')?.checked || false;
   if (!name || !username || !password) { showToast('⚠️ 필수 항목을 입력해주세요.'); return; }
   try {
-    await api('POST', '/users/', { name, username, password, role });
+    await api('POST', '/users/', { name, username, password, role, can_create_delivery: canCreate, can_assign_vehicle: canAssign });
     closeModal('addUserModal');
     showToast('✅ 사용자가 추가되었습니다.');
     loadUsers();

@@ -40,6 +40,8 @@ class UserBase(BaseModel):
     name: str
     username: str
     role: str
+    can_create_delivery: bool = False
+    can_assign_vehicle: bool = False
 
 
 class UserCreate(UserBase):
@@ -52,6 +54,11 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+class UserPermissionUpdate(BaseModel):
+    can_create_delivery: Optional[bool] = None
+    can_assign_vehicle: Optional[bool] = None
 
 
 # ── Auth ──────────────────────────────────────────
@@ -67,12 +74,18 @@ class DeliveryCreate(BaseModel):
     destination: str
     item_name: str                          # 품목
     quantity: int                           # 수량 (Kg)
-    driver_id: int
-    vehicle_number: Optional[str] = None
     scheduled_date: str
     delivery_time: str                      # 배송시간
     delivery_type: str = "출하"             # 출하 / 입하
     notes: Optional[str] = None
+    # 배차 정보 (배차 권한자가 별도 설정, 생성 시 없어도 됨)
+    driver_id: Optional[int] = None
+    vehicle_number: Optional[str] = None
+
+
+class DeliveryAssign(BaseModel):
+    driver_id: int
+    vehicle_number: Optional[str] = None
 
 
 class DeliveryUpdate(BaseModel):
@@ -100,7 +113,7 @@ class DeliveryResponse(BaseModel):
     destination: str
     item_name: str
     quantity: int
-    driver_id: int
+    driver_id: Optional[int]
     vehicle_number: Optional[str]
     scheduled_date: str
     delivery_time: str

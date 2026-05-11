@@ -63,8 +63,8 @@ def create_delivery(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ADMIN_ROLES:
-        raise HTTPException(status_code=403, detail="관리자만 배송을 할당할 수 있습니다.")
+    if current_user.role != "superadmin" and not current_user.can_create_delivery:
+        raise HTTPException(status_code=403, detail="배송 카드 생성 권한이 없습니다.")
 
     db_delivery = models.Delivery(**delivery.dict(), created_by=current_user.id)
     db.add(db_delivery)
@@ -114,6 +114,26 @@ def update_status(
     return {"success": True}
 
 
+@router.patch("/{delivery_id}/assign")
+def assign_vehicle(
+    delivery_id: int,
+    assign: schemas.DeliveryAssign,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """배차 권한자: 기사/차량 배정"""
+    if current_user.role != "superadmin" and not current_user.can_assign_vehicle:
+        raise HTTPException(status_code=403, detail="배차 권한이 없습니다.")
+    d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    d.driver_id = assign.driver_id
+    d.vehicle_number = assign.vehicle_number
+    d.updated_at = datetime.utcnow()
+    db.commit()
+    return {"success": True}
+
+
 @router.patch("/{delivery_id}/revert")
 def revert_status(
     delivery_id: int,
@@ -121,8 +141,8 @@ def revert_status(
     current_user: models.User = Depends(get_current_user),
 ):
     """관리자 전용: 상태를 이전 단계로 되돌리기"""
-    if current_user.role not in ADMIN_ROLES:
-        raise HTTPException(status_code=403, detail="관리자만 상태를 되돌릴 수 있습니다.")
+    if current_user.role != "superadmin" and not (current_user.can_create_delivery or current_user.can_assign_vehicle):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
