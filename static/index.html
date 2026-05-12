@@ -235,7 +235,7 @@ header h2 { font-size: 16px; font-weight: 700; }
 
   <!-- 기사 탭 -->
   <div id="driverTabs" class="tab-bar hidden">
-    <button class="tab-btn active" onclick="switchTab('myDeliveries', this)">📦 내 배송</button>
+    <button class="tab-btn active" onclick="switchTab('myDeliveries', this)">📦 미완료 배송</button>
     <button class="tab-btn" onclick="switchTab('myHistory', this)">📜 완료 내역</button>
   </div>
 
@@ -346,9 +346,9 @@ header h2 { font-size: 16px; font-weight: 700; }
       <div id="userTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
 
-    <!-- 기사: 내 배송 -->
+    <!-- 기사: 미완료 배송 -->
     <div id="tab-myDeliveries" class="hidden">
-      <div class="section-header"><h3>배정된 배송</h3></div>
+      <div class="section-header"><h3>미완료 배송</h3></div>
       <div class="delivery-list" id="myDeliveryList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
 
@@ -1252,10 +1252,9 @@ async function loadDriverStatus() {
 async function loadMyDeliveries() {
   document.getElementById('myDeliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const list = await api('GET', `/deliveries/?date=${today}`);
+    const list = await api('GET', '/deliveries/');
     const active = list.filter(d => d.status !== 'done' && d.status !== 'cancel');
-    document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('배정된 배송이 없습니다.');
+    document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('미완료 배송이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
 
@@ -1294,7 +1293,8 @@ async function loadMyHistory() {
       dateFrom = `${year}-01-01`;
       dateTo   = `${year}-12-31`;
     }
-    const list = await api('GET', `/deliveries/?date_from=${dateFrom}&date_to=${dateTo}`);
+    const all = await api('GET', `/deliveries/?date_from=${dateFrom}&date_to=${dateTo}`);
+    const list = all.filter(d => d.status !== 'cancel');
     document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driverHistory') || emptyMsg('배송 기록이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
