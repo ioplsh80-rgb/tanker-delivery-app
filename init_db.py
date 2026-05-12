@@ -46,6 +46,20 @@ print("✅ 마이그레이션 완료")
 
 db = SessionLocal()
 
+# ── 기존 seed 기사 계정 삭제 (driver01~driver10 → 기사 관리 탭으로 이전) ──
+seed_driver = db.query(models.User).filter(models.User.username == "driver01").first()
+if seed_driver:
+    print("기존 seed 기사 계정 삭제 중...")
+    old_drivers = db.query(models.User).filter(models.User.role == "driver").all()
+    for d in old_drivers:
+        # 해당 기사에 배정된 배송의 driver_id를 NULL 로
+        db.query(models.Delivery).filter(models.Delivery.driver_id == d.id).update(
+            {"driver_id": None}, synchronize_session=False
+        )
+        db.delete(d)
+    db.commit()
+    print(f"  {len(old_drivers)}명의 seed 기사 계정 삭제 완료")
+
 # ── 사용자 ──────────────────────────────────────────────
 if db.query(models.User).count() == 0:
     print("초기 사용자 데이터를 생성합니다...")
@@ -60,17 +74,7 @@ if db.query(models.User).count() == 0:
              "can_create_delivery": True, "can_assign_vehicle": True}
             for i in range(1, 16)
         ],
-        # 배송기사 10명 (차량은 배송 할당 시 별도 지정)
-        {"name": "박민준", "username": "driver01", "password": "Driver1234!", "role": "driver"},
-        {"name": "최성호", "username": "driver02", "password": "Driver1234!", "role": "driver"},
-        {"name": "정동혁", "username": "driver03", "password": "Driver1234!", "role": "driver"},
-        {"name": "이재원", "username": "driver04", "password": "Driver1234!", "role": "driver"},
-        {"name": "김태호", "username": "driver05", "password": "Driver1234!", "role": "driver"},
-        {"name": "윤성민", "username": "driver06", "password": "Driver1234!", "role": "driver"},
-        {"name": "한동훈", "username": "driver07", "password": "Driver1234!", "role": "driver"},
-        {"name": "조현우", "username": "driver08", "password": "Driver1234!", "role": "driver"},
-        {"name": "서진수", "username": "driver09", "password": "Driver1234!", "role": "driver"},
-        {"name": "남궁민", "username": "driver10", "password": "Driver1234!", "role": "driver"},
+        # 기사는 '기사 관리' 탭에서 별도 추가 (seed 데이터 없음)
     ]
     for u in seed_users:
         db.add(models.User(
@@ -82,10 +86,9 @@ if db.query(models.User).count() == 0:
             can_assign_vehicle=u.get("can_assign_vehicle", False),
         ))
     db.commit()
-    print(f"✅ 사용자 {len(seed_users)}명 생성 완료")
+    print(f"  사용자 {len(seed_users)}명 생성 완료")
     print("   슈퍼관리자: superadmin / 비밀번호: Super1234!")
     print("   관리자: admin01~admin15 / 비밀번호: Admin1234!")
-    print("   기사:   driver01~driver10 / 비밀번호: Driver1234!")
 else:
     print("ℹ️  사용자 데이터가 이미 존재합니다. 건너뜁니다.")
 

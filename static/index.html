@@ -227,7 +227,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     <button class="tab-btn active" onclick="switchTab('dashboard', this)">📊 대시보드</button>
     <button class="tab-btn" onclick="switchTab('deliveries', this)">📋 배송 목록</button>
     <button class="tab-btn" onclick="switchTab('drivers', this)">👷 기사 현황</button>
-    <button class="tab-btn" onclick="switchTab('vehicles', this)">🚛 차량 관리</button>
+    <button class="tab-btn" onclick="switchTab('vehicles', this)">🚗 기사 관리</button>
     <button class="tab-btn" onclick="switchTab('items', this)">🗂️ 품목 관리</button>
     <button class="tab-btn" onclick="switchTab('companies', this)">🏢 고객사 관리</button>
     <button class="tab-btn" onclick="switchTab('users', this)">⚙️ 사용자 관리</button>
@@ -308,8 +308,14 @@ header h2 { font-size: 16px; font-weight: 700; }
       </div>
     </div>
 
-    <!-- 관리자: 차량 관리 -->
+    <!-- 관리자: 기사 관리 (기사 + 차량) -->
     <div id="tab-vehicles" class="hidden">
+      <div class="section-header">
+        <h3>기사 관리</h3>
+        <button class="btn btn-primary btn-sm" onclick="openAddDriverMgmtModal()">+ 기사 추가</button>
+      </div>
+      <div id="driverMgmtTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+      <div style="margin:28px 0 16px;border-top:2px solid #e5e7eb;padding-top:4px;"></div>
       <div class="section-header">
         <h3>차량 관리</h3>
         <button class="btn btn-primary btn-sm" onclick="openAddVehicleModal()">+ 차량 추가</button>
@@ -340,7 +346,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     <!-- 관리자: 사용자 관리 -->
     <div id="tab-users" class="hidden">
       <div class="section-header">
-        <h3>사용자 관리</h3>
+        <h3>관리자 계정 관리</h3>
         <button class="btn btn-primary btn-sm" onclick="openAddUserModal()">+ 사용자 추가</button>
       </div>
       <div id="userTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
@@ -534,7 +540,6 @@ header h2 { font-size: 16px; font-weight: 700; }
         <div class="form-group">
           <label>역할 *</label>
           <select id="u-role">
-            <option value="driver">배송기사</option>
             <option value="admin">관리자</option>
           </select>
         </div>
@@ -603,6 +608,89 @@ header h2 { font-size: 16px; font-weight: 700; }
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('editUserModal')">취소</button>
       <button class="btn btn-primary" onclick="submitEditUser()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 기사 추가 모달 (기사 관리 탭) ══ -->
+<div id="addDriverMgmtModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👤 기사 추가</h3>
+      <button class="modal-close" onclick="closeModal('addDriverMgmtModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>이름 *</label>
+          <input type="text" id="dm-name" placeholder="예: 홍길동">
+        </div>
+        <div class="form-group">
+          <label>아이디 *</label>
+          <input type="text" id="dm-username" placeholder="예: driver11">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>비밀번호 *</label>
+          <input type="password" id="dm-password" placeholder="초기 비밀번호">
+        </div>
+        <div class="form-group">
+          <label>연락처</label>
+          <input type="text" id="dm-phone" placeholder="예: 010-1234-5678">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>메일주소</label>
+          <input type="email" id="dm-email" placeholder="예: hong@company.com">
+        </div>
+        <div class="form-group">
+          <label>소속</label>
+          <input type="text" id="dm-department" placeholder="예: 물류팀">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addDriverMgmtModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitAddDriverMgmt()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 기사 수정 모달 (기사 관리 탭) ══ -->
+<div id="editDriverMgmtModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ 기사 정보 수정</h3>
+      <button class="modal-close" onclick="closeModal('editDriverMgmtModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edm-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>이름 *</label>
+          <input type="text" id="edm-name" placeholder="예: 홍길동">
+        </div>
+        <div class="form-group">
+          <label>연락처</label>
+          <input type="text" id="edm-phone" placeholder="예: 010-1234-5678">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>메일주소</label>
+          <input type="email" id="edm-email" placeholder="예: hong@company.com">
+        </div>
+        <div class="form-group">
+          <label>소속</label>
+          <input type="text" id="edm-department" placeholder="예: 물류팀">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('editDriverMgmtModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitEditDriverMgmt()">저장</button>
     </div>
   </div>
 </div>
@@ -968,6 +1056,39 @@ async function loadCompanies() {
 // 차량 탭
 // ═══════════════════════════════════════════════════
 async function loadVehicleTab() {
+  await Promise.all([loadDriverMgmt(), loadVehicleList()]);
+}
+
+async function loadDriverMgmt() {
+  document.getElementById('driverMgmtTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
+  try {
+    const list = await api('GET', '/users/');
+    const drivers = list.filter(u => u.role === 'driver');
+    if (!drivers.length) { document.getElementById('driverMgmtTableWrap').innerHTML = emptyMsg('등록된 기사가 없습니다.'); return; }
+    const rows = drivers.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td><strong>${u.name}</strong></td>
+        <td>${u.username}</td>
+        <td>${u.department || '-'}</td>
+        <td>${u.phone || '-'}</td>
+        <td>${u.email || '-'}</td>
+        <td>
+          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;"
+            onclick="openEditDriverMgmtModal(${u.id},'${(u.name||'').replace(/'/g,"\'")}','${(u.phone||'').replace(/'/g,"\'")}','${(u.email||'').replace(/'/g,"\'")}','${(u.department||'').replace(/'/g,"\'")}')">수정</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteDriverMgmt(${u.id})">삭제</button>
+        </td>
+      </tr>`).join('');
+    document.getElementById('driverMgmtTableWrap').innerHTML = `
+      <div style="overflow-x:auto;">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>소속</th><th>연락처</th><th>메일</th><th>관리</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  } catch (e) { showToast('⚠️ 기사 로딩 실패'); }
+}
+
+async function loadVehicleList() {
   document.getElementById('vehicleTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const list = await api('GET', '/vehicles/');
@@ -982,11 +1103,71 @@ async function loadVehicleTab() {
         <td><button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id})">삭제</button></td>
       </tr>`).join('');
     document.getElementById('vehicleTableWrap').innerHTML = `
+      <div style="overflow-x:auto;">
       <table class="data-table">
         <thead><tr><th>ID</th><th>차량번호</th><th>종류</th><th>최대적재량</th><th>비고</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table></div>`;
   } catch (e) { showToast('⚠️ 차량 로딩 실패'); }
+}
+
+function openAddDriverMgmtModal() {
+  ['dm-name','dm-username','dm-password','dm-phone','dm-email','dm-department'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('addDriverMgmtModal').classList.remove('hidden');
+}
+
+async function submitAddDriverMgmt() {
+  const name       = document.getElementById('dm-name').value.trim();
+  const username   = document.getElementById('dm-username').value.trim();
+  const password   = document.getElementById('dm-password').value;
+  const phone      = document.getElementById('dm-phone').value.trim();
+  const email      = document.getElementById('dm-email').value.trim();
+  const department = document.getElementById('dm-department').value.trim();
+  if (!name || !username || !password) { showToast('⚠️ 이름, 아이디, 비밀번호는 필수입니다.'); return; }
+  try {
+    await api('POST', '/users/', { name, username, password, role: 'driver',
+      phone: phone||null, email: email||null, department: department||null,
+      can_create_delivery: false, can_assign_vehicle: false });
+    closeModal('addDriverMgmtModal');
+    showToast('기사가 추가되었습니다.');
+    loadDriverMgmt();
+    loadDrivers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+function openEditDriverMgmtModal(id, name, phone, email, department) {
+  document.getElementById('edm-id').value = id;
+  document.getElementById('edm-name').value = name;
+  document.getElementById('edm-phone').value = phone;
+  document.getElementById('edm-email').value = email;
+  document.getElementById('edm-department').value = department;
+  document.getElementById('editDriverMgmtModal').classList.remove('hidden');
+}
+
+async function submitEditDriverMgmt() {
+  const id         = document.getElementById('edm-id').value;
+  const name       = document.getElementById('edm-name').value.trim();
+  const phone      = document.getElementById('edm-phone').value.trim();
+  const email      = document.getElementById('edm-email').value.trim();
+  const department = document.getElementById('edm-department').value.trim();
+  if (!name) { showToast('⚠️ 이름을 입력해주세요.'); return; }
+  try {
+    await api('PATCH', `/users/${id}/info`, { name, phone: phone||null, email: email||null, department: department||null });
+    closeModal('editDriverMgmtModal');
+    showToast('기사 정보가 수정되었습니다.');
+    loadDriverMgmt();
+    loadDrivers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function deleteDriverMgmt(id) {
+  if (!confirm('이 기사를 삭제하시겠습니까?\n해당 기사에게 배정된 배송 기록은 유지됩니다.')) return;
+  try {
+    await api('PATCH', `/users/${id}/deactivate`, {});
+    showToast('기사가 삭제되었습니다.');
+    loadDriverMgmt();
+    loadDrivers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 function openAddVehicleModal() {
@@ -1007,7 +1188,7 @@ async function submitAddVehicle() {
     closeModal('addVehicleModal');
     showToast('✅ 차량이 추가되었습니다.');
     await loadVehicles();
-    loadVehicleTab();
+    loadVehicleList();
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
@@ -1017,7 +1198,7 @@ async function deleteVehicle(id) {
     await api('DELETE', `/vehicles/${id}`);
     showToast('✅ 차량이 삭제되었습니다.');
     await loadVehicles();
-    loadVehicleTab();
+    loadVehicleList();
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
@@ -1771,7 +1952,8 @@ async function loadUsers() {
     const users = await api('GET', '/users/');
     const roleLabel = {superadmin:'슈퍼관리자', admin:'관리자', driver:'기사'};
     const roleBadge = {superadmin:'badge-done', admin:'badge-departed', driver:'badge-wait'};
-    const rows = users.map(u => `
+    const adminUsers = users.filter(u => u.role !== 'driver');
+    const rows = adminUsers.map(u => `
       <tr>
         <td>${u.id}</td>
         <td>${u.name}</td>
@@ -1801,7 +1983,7 @@ async function loadUsers() {
 
 function openAddUserModal() {
   ['u-name','u-username','u-password','u-department','u-phone','u-email'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('u-role').value = 'driver';
+  document.getElementById('u-role').value = 'admin';
   document.getElementById('u-can-create').checked = false;
   document.getElementById('u-can-assign').checked = false;
   document.getElementById('addUserModal').classList.remove('hidden');
