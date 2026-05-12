@@ -135,7 +135,12 @@ def assign_vehicle(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     d.driver_id = assign.driver_id
-    d.vehicle_number = assign.vehicle_number
+    if assign.vehicle_number:
+        d.vehicle_number = assign.vehicle_number
+    else:
+        driver = db.query(models.User).filter(models.User.id == assign.driver_id).first()
+        if driver and driver.vehicle_number:
+            d.vehicle_number = driver.vehicle_number
     d.updated_at = datetime.utcnow()
     db.commit()
     return {"success": True}

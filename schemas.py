@@ -61,6 +61,8 @@ class UserBase(BaseModel):
     can_create_delivery: bool = False
     can_assign_vehicle: bool = False
     vehicle_id: Optional[int] = None
+    vehicle_number: Optional[str] = None
+    vehicle_type: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -73,6 +75,8 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     vehicle_id: Optional[int] = None
+    vehicle_number: Optional[str] = None
+    vehicle_type: Optional[str] = None
 
 
 class UserResponse(UserBase):

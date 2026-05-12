@@ -308,19 +308,13 @@ header h2 { font-size: 16px; font-weight: 700; }
       </div>
     </div>
 
-    <!-- 관리자: 기사 관리 (기사 + 차량) -->
+    <!-- 관리자: 기사 관리 -->
     <div id="tab-vehicles" class="hidden">
       <div class="section-header">
         <h3>기사 관리</h3>
         <button class="btn btn-primary btn-sm" onclick="openAddDriverMgmtModal()">+ 기사 추가</button>
       </div>
       <div id="driverMgmtTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
-      <div style="margin:28px 0 16px;border-top:2px solid #e5e7eb;padding-top:4px;"></div>
-      <div class="section-header">
-        <h3>차량 관리</h3>
-        <button class="btn btn-primary btn-sm" onclick="openAddVehicleModal()">+ 차량 추가</button>
-      </div>
-      <div id="vehicleTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
 
     <!-- 관리자: 품목 관리 -->
@@ -452,19 +446,14 @@ header h2 { font-size: 16px; font-weight: 700; }
     </div>
     <div class="modal-body">
       <div id="assignVehicleInfo" style="background:#f0f4ff;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#374151;"></div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>담당 기사 *</label>
-          <select id="av-driver">
-            <option value="">선택하세요</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>차량 번호 *</label>
-          <select id="av-vehicle">
-            <option value="">선택하세요</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label>담당 기사 *</label>
+        <select id="av-driver">
+          <option value="">선택하세요</option>
+        </select>
+      </div>
+      <div id="av-vehicle-info" style="margin-top:10px;padding:10px 12px;background:#f9fafb;border-radius:8px;font-size:13px;color:#374151;display:none;">
+        🚛 <span id="av-vehicle-text"></span>
       </div>
     </div>
     <div class="modal-footer">
@@ -714,11 +703,16 @@ header h2 { font-size: 16px; font-weight: 700; }
           <input type="text" id="dm-department" placeholder="예: 물류팀">
         </div>
       </div>
-      <div class="form-group">
-        <label>담당 차량</label>
-        <select id="dm-vehicle">
-          <option value="0">없음</option>
-        </select>
+      <div class="form-section-title" style="margin-top:8px;">차량 정보</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>차량 번호</label>
+          <input type="text" id="dm-vehicle-number" placeholder="예: 12가 3456">
+        </div>
+        <div class="form-group">
+          <label>차량 종류</label>
+          <input type="text" id="dm-vehicle-type" placeholder="예: 탱크로리 20톤">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -757,11 +751,16 @@ header h2 { font-size: 16px; font-weight: 700; }
           <input type="text" id="edm-department" placeholder="예: 물류팀">
         </div>
       </div>
-      <div class="form-group">
-        <label>담당 차량</label>
-        <select id="edm-vehicle">
-          <option value="0">없음</option>
-        </select>
+      <div class="form-section-title" style="margin-top:8px;">차량 정보</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>차량 번호</label>
+          <input type="text" id="edm-vehicle-number" placeholder="예: 12가 3456">
+        </div>
+        <div class="form-group">
+          <label>차량 종류</label>
+          <input type="text" id="edm-vehicle-type" placeholder="예: 탱크로리 20톤">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1042,7 +1041,8 @@ async function initApp() {
     document.getElementById('adminTabs').classList.remove('hidden');
     document.getElementById('headerTitle').textContent = currentUser.role === 'superadmin' ? '슈퍼관리자 대시보드' : '관리자 대시보드';
     currentTab = 'dashboard';
-    await Promise.all([loadDrivers(), loadVehicles(), loadItems(), loadCompanies()]);
+    await loadDrivers();
+    await Promise.all([loadVehicles(), loadItems(), loadCompanies()]);
     // 일반 관리자는 관리 탭 숨기기
     if (currentUser.role !== 'superadmin') {
       ['vehicles','items','companies','users'].forEach(t => {
@@ -1103,10 +1103,10 @@ async function loadDrivers() {
 
 async function loadVehicles() {
   try {
-    vehiclesList = await api('GET', '/vehicles/');
     const sel = document.getElementById('f-vehicle');
+    const nums = [...new Set(drivers.filter(d => d.vehicle_number).map(d => d.vehicle_number))];
     sel.innerHTML = '<option value="">선택하세요</option>' +
-      vehiclesList.map(v => `<option value="${v.vehicle_number}">${v.vehicle_number}${v.vehicle_type ? ' · ' + v.vehicle_type : ''}</option>`).join('');
+      nums.map(n => `<option value="${n}">${n}</option>`).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -1132,7 +1132,6 @@ async function loadCompanies() {
 // 차량 탭
 // ═══════════════════════════════════════════════════
 async function loadVehicleTab() {
-  await loadVehicleList();
   await loadDriverMgmt();
 }
 
@@ -1143,8 +1142,7 @@ async function loadDriverMgmt() {
     const drivers = list.filter(u => u.role === 'driver');
     if (!drivers.length) { document.getElementById('driverMgmtTableWrap').innerHTML = emptyMsg('등록된 기사가 없습니다.'); return; }
     const rows = drivers.map(u => {
-      const veh = vehiclesList.find(v => v.id === u.vehicle_id);
-      const vehTxt = veh ? veh.vehicle_number + (veh.vehicle_type ? ' · ' + veh.vehicle_type : '') : '-';
+      const vehTxt = u.vehicle_number ? u.vehicle_number + (u.vehicle_type ? ' · ' + u.vehicle_type : '') : '-';
       return `
       <tr>
         <td>${u.id}</td>
@@ -1155,7 +1153,7 @@ async function loadDriverMgmt() {
         <td>${vehTxt}</td>
         <td>
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;"
-            onclick="openEditDriverMgmtModal(${u.id},'${(u.name||'').replace(/'/g,"\'")}','${(u.phone||'').replace(/'/g,"\'")}','${(u.email||'').replace(/'/g,"\'")}','${(u.department||'').replace(/'/g,"\'")}',${u.vehicle_id||0})">수정</button>
+            onclick="openEditDriverMgmtModal(${u.id},'${(u.name||'').replace(/'/g,"\'")}','${(u.phone||'').replace(/'/g,"\'")}','${(u.email||'').replace(/'/g,"\'")}','${(u.department||'').replace(/'/g,"\'")}','${(u.vehicle_number||'').replace(/'/g,"\'")}','${(u.vehicle_type||'').replace(/'/g,"\'")}')">수정</button>
           <button class="btn btn-danger btn-sm" onclick="deleteDriverMgmt(${u.id})">삭제</button>
         </td>
       </tr>`;
@@ -1163,7 +1161,7 @@ async function loadDriverMgmt() {
     document.getElementById('driverMgmtTableWrap').innerHTML = `
       <div style="overflow-x:auto;">
       <table class="data-table">
-        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>소속</th><th>연락처</th><th>담당 차량</th><th>관리</th></tr></thead>
+        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>소속</th><th>연락처</th><th>차량번호 · 종류</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>`;
   } catch (e) { showToast('⚠️ 기사 로딩 실패'); }
@@ -1193,10 +1191,7 @@ async function loadVehicleList() {
 }
 
 function openAddDriverMgmtModal() {
-  ['dm-name','dm-username','dm-password','dm-phone','dm-email','dm-department'].forEach(id => document.getElementById(id).value = '');
-  const vSel = document.getElementById('dm-vehicle');
-  vSel.innerHTML = '<option value="0">없음</option>' +
-    vehiclesList.map(v => `<option value="${v.id}">${v.vehicle_number}${v.vehicle_type ? ' · ' + v.vehicle_type : ''}</option>`).join('');
+  ['dm-name','dm-username','dm-password','dm-phone','dm-email','dm-department','dm-vehicle-number','dm-vehicle-type'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('addDriverMgmtModal').classList.remove('hidden');
 }
 
@@ -1207,13 +1202,14 @@ async function submitAddDriverMgmt() {
   const phone      = document.getElementById('dm-phone').value.trim();
   const email      = document.getElementById('dm-email').value.trim();
   const department = document.getElementById('dm-department').value.trim();
+  const vehicleNumber = document.getElementById('dm-vehicle-number').value.trim();
+  const vehicleType   = document.getElementById('dm-vehicle-type').value.trim();
   if (!name || !username || !password) { showToast('⚠️ 이름, 아이디, 비밀번호는 필수입니다.'); return; }
-  const vehicleId = parseInt(document.getElementById('dm-vehicle').value) || null;
   try {
     await api('POST', '/users/', { name, username, password, role: 'driver',
       phone: phone||null, email: email||null, department: department||null,
       can_create_delivery: false, can_assign_vehicle: false,
-      vehicle_id: vehicleId });
+      vehicle_number: vehicleNumber||null, vehicle_type: vehicleType||null });
     closeModal('addDriverMgmtModal');
     showToast('기사가 추가되었습니다.');
     loadDriverMgmt();
@@ -1221,16 +1217,14 @@ async function submitAddDriverMgmt() {
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
-function openEditDriverMgmtModal(id, name, phone, email, department, vehicleId) {
+function openEditDriverMgmtModal(id, name, phone, email, department, vehicleNumber, vehicleType) {
   document.getElementById('edm-id').value = id;
   document.getElementById('edm-name').value = name;
   document.getElementById('edm-phone').value = phone;
   document.getElementById('edm-email').value = email;
   document.getElementById('edm-department').value = department;
-  const vSel = document.getElementById('edm-vehicle');
-  vSel.innerHTML = '<option value="0">없음</option>' +
-    vehiclesList.map(v => `<option value="${v.id}">${v.vehicle_number}${v.vehicle_type ? ' · ' + v.vehicle_type : ''}</option>`).join('');
-  vSel.value = vehicleId || 0;
+  document.getElementById('edm-vehicle-number').value = vehicleNumber || '';
+  document.getElementById('edm-vehicle-type').value = vehicleType || '';
   document.getElementById('editDriverMgmtModal').classList.remove('hidden');
 }
 
@@ -1240,10 +1234,12 @@ async function submitEditDriverMgmt() {
   const phone      = document.getElementById('edm-phone').value.trim();
   const email      = document.getElementById('edm-email').value.trim();
   const department = document.getElementById('edm-department').value.trim();
+  const vehicleNumber = document.getElementById('edm-vehicle-number').value.trim();
+  const vehicleType   = document.getElementById('edm-vehicle-type').value.trim();
   if (!name) { showToast('⚠️ 이름을 입력해주세요.'); return; }
-  const vehicleId = parseInt(document.getElementById('edm-vehicle').value);
   try {
-    await api('PATCH', `/users/${id}/info`, { name, phone: phone||null, email: email||null, department: department||null, vehicle_id: vehicleId });
+    await api('PATCH', `/users/${id}/info`, { name, phone: phone||null, email: email||null, department: department||null,
+      vehicle_number: vehicleNumber||null, vehicle_type: vehicleType||null });
     closeModal('editDriverMgmtModal');
     showToast('기사 정보가 수정되었습니다.');
     loadDriverMgmt();
@@ -1949,30 +1945,30 @@ function openAssignVehicleModal(id) {
   const driverSel = document.getElementById('av-driver');
   driverSel.innerHTML = '<option value="">선택하세요</option>' +
     drivers.map(dr => `<option value="${dr.id}">${dr.name}</option>`).join('');
-  const vehicleSel = document.getElementById('av-vehicle');
-  vehicleSel.innerHTML = '<option value="">선택하세요</option>' +
-    vehiclesList.map(v => `<option value="${v.vehicle_number}">${v.vehicle_number} · ${v.vehicle_type||''}</option>`).join('');
-  if (d.driver_id) driverSel.value = d.driver_id;
-  if (d.vehicle_number) vehicleSel.value = d.vehicle_number;
-  driverSel.onchange = function() {
-    const sel = drivers.find(dr => dr.id == this.value);
-    if (sel && sel.vehicle_id) {
-      const v = vehiclesList.find(v => v.id === sel.vehicle_id);
-      if (v) vehicleSel.value = v.vehicle_number;
+  const updateVehicleInfo = (driverId) => {
+    const infoEl = document.getElementById('av-vehicle-info');
+    const textEl = document.getElementById('av-vehicle-text');
+    const dr = drivers.find(d => d.id == driverId);
+    if (dr && dr.vehicle_number) {
+      textEl.textContent = dr.vehicle_number + (dr.vehicle_type ? ' · ' + dr.vehicle_type : '');
+      infoEl.style.display = 'block';
+    } else {
+      infoEl.style.display = 'none';
     }
   };
+  if (d.driver_id) { driverSel.value = d.driver_id; updateVehicleInfo(d.driver_id); }
+  driverSel.onchange = function() { updateVehicleInfo(this.value); };
   document.getElementById('assignVehicleModal').classList.remove('hidden');
 }
 
 async function submitAssignVehicle() {
   const driverId = document.getElementById('av-driver').value;
-  const vehicle  = document.getElementById('av-vehicle').value;
-  if (!driverId || !vehicle) { showToast('⚠️ 기사와 차량을 모두 선택해주세요.'); return; }
+  if (!driverId) { showToast('⚠️ 기사를 선택해주세요.'); return; }
   const btn = document.getElementById('assignVehicleBtn');
   btn.disabled = true; btn.textContent = '처리 중...';
   try {
     await api('PATCH', `/deliveries/${currentAssignId}/assign`, {
-      driver_id: parseInt(driverId), vehicle_number: vehicle,
+      driver_id: parseInt(driverId),
     });
     closeModal('assignVehicleModal');
     showToast('✅ 배차가 등록되었습니다.');

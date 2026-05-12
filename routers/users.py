@@ -82,6 +82,10 @@ def update_user_info(
         user.phone = body.phone
     if body.vehicle_id is not None:
         user.vehicle_id = body.vehicle_id if body.vehicle_id != 0 else None
+    if body.vehicle_number is not None:
+        user.vehicle_number = body.vehicle_number if body.vehicle_number else None
+    if body.vehicle_type is not None:
+        user.vehicle_type = body.vehicle_type if body.vehicle_type else None
     db.commit()
     db.refresh(user)
     return user
