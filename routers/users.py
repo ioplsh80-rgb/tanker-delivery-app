@@ -48,6 +48,9 @@ def create_user(
         username=user.username,
         password_hash=get_password_hash(user.password),
         role=user.role,
+        department=user.department,
+        email=user.email,
+        phone=user.phone,
         can_create_delivery=user.can_create_delivery,
         can_assign_vehicle=user.can_assign_vehicle,
     )
@@ -55,6 +58,31 @@ def create_user(
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+@router.patch("/{user_id}/info")
+def update_user_info(
+    user_id: int,
+    body: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 사용자 정보를 수정할 수 있습니다.")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if body.name is not None:
+        user.name = body.name
+    if body.department is not None:
+        user.department = body.department
+    if body.email is not None:
+        user.email = body.email
+    if body.phone is not None:
+        user.phone = body.phone
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.patch("/{user_id}/password")

@@ -12,6 +12,9 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     role = Column(String(10), nullable=False)          # superadmin / admin / driver
+    department = Column(String(100))                   # 소속
+    email = Column(String(200))                        # 메일주소
+    phone = Column(String(50))                         # 연락처
     can_create_delivery = Column(Boolean, default=False)  # 배송정보 입력 권한
     can_assign_vehicle = Column(Boolean, default=False)   # 배차 권한
     is_active = Column(Boolean, default=True)
@@ -27,6 +30,9 @@ class Company(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
     address = Column(String(200))
+    contact_name = Column(String(100))                 # 담당자 성명
+    contact_email = Column(String(200))                # 담당자 메일
+    contact_phone = Column(String(50))                 # 담당자 연락처
     notes = Column(Text)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

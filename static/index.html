@@ -354,7 +354,19 @@ header h2 { font-size: 16px; font-weight: 700; }
 
     <!-- 기사: 완료 내역 -->
     <div id="tab-myHistory" class="hidden">
-      <div class="section-header"><h3>완료된 배송</h3></div>
+      <div class="section-header">
+        <h3>배송 기록</h3>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="historyYear" onchange="loadMyHistory()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;"></select>
+          <select id="historyMonth" onchange="loadMyHistory()" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;">
+            <option value="">전체</option>
+            <option value="01">1월</option><option value="02">2월</option><option value="03">3월</option>
+            <option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
+            <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option>
+            <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+          </select>
+        </div>
+      </div>
       <div class="delivery-list" id="myHistoryList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
 
@@ -527,6 +539,20 @@ header h2 { font-size: 16px; font-weight: 700; }
           </select>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>소속</label>
+          <input type="text" id="u-department" placeholder="예: 물류팀">
+        </div>
+        <div class="form-group">
+          <label>연락처</label>
+          <input type="text" id="u-phone" placeholder="예: 010-1234-5678">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>메일주소</label>
+        <input type="email" id="u-email" placeholder="예: hong@company.com">
+      </div>
       <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:8px;">
         <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">권한 설정</div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer;">
@@ -540,6 +566,43 @@ header h2 { font-size: 16px; font-weight: 700; }
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('addUserModal')">취소</button>
       <button class="btn btn-primary" onclick="submitAddUser()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 사용자 수정 모달 ══ -->
+<div id="editUserModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ 사용자 정보 수정</h3>
+      <button class="modal-close" onclick="closeModal('editUserModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="eu-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>이름 *</label>
+          <input type="text" id="eu-name" placeholder="예: 홍길동">
+        </div>
+        <div class="form-group">
+          <label>소속</label>
+          <input type="text" id="eu-department" placeholder="예: 물류팀">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>연락처</label>
+          <input type="text" id="eu-phone" placeholder="예: 010-1234-5678">
+        </div>
+        <div class="form-group">
+          <label>메일주소</label>
+          <input type="email" id="eu-email" placeholder="예: hong@company.com">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('editUserModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitEditUser()">저장</button>
     </div>
   </div>
 </div>
@@ -621,6 +684,20 @@ header h2 { font-size: 16px; font-weight: 700; }
         <label>주소</label>
         <input type="text" id="c-address" placeholder="예: 서울시 중구">
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>담당자 성명</label>
+          <input type="text" id="c-contact-name" placeholder="예: 김담당">
+        </div>
+        <div class="form-group">
+          <label>담당자 연락처</label>
+          <input type="text" id="c-contact-phone" placeholder="예: 010-1234-5678">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>담당자 메일</label>
+        <input type="email" id="c-contact-email" placeholder="예: kim@company.com">
+      </div>
       <div class="form-group">
         <label>비고</label>
         <input type="text" id="c-notes" placeholder="메모">
@@ -629,6 +706,49 @@ header h2 { font-size: 16px; font-weight: 700; }
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('addCompanyModal')">취소</button>
       <button class="btn btn-primary" onclick="submitAddCompany()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 고객사 수정 모달 -->
+<div id="editCompanyModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ 고객사 정보 수정</h3>
+      <button class="modal-close" onclick="closeModal('editCompanyModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ec-id">
+      <div class="form-group">
+        <label>고객사명 *</label>
+        <input type="text" id="ec-name" placeholder="예: 한화케미칼">
+      </div>
+      <div class="form-group">
+        <label>주소</label>
+        <input type="text" id="ec-address" placeholder="예: 서울시 중구">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>담당자 성명</label>
+          <input type="text" id="ec-contact-name" placeholder="예: 김담당">
+        </div>
+        <div class="form-group">
+          <label>담당자 연락처</label>
+          <input type="text" id="ec-contact-phone" placeholder="예: 010-1234-5678">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>담당자 메일</label>
+        <input type="email" id="ec-contact-email" placeholder="예: kim@company.com">
+      </div>
+      <div class="form-group">
+        <label>비고</label>
+        <input type="text" id="ec-notes" placeholder="메모">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('editCompanyModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitEditCompany()">저장</button>
     </div>
   </div>
 </div>
@@ -802,7 +922,7 @@ function switchTab(name, btn) {
   else if (name === 'companies')  loadCompanyTab();
   else if (name === 'users')      loadUsers();
   else if (name === 'myDeliveries') loadMyDeliveries();
-  else if (name === 'myHistory')  loadMyHistory();
+  else if (name === 'myHistory')  { initHistoryFilter(); loadMyHistory(); }
 }
 
 // ═══════════════════════════════════════════════════
@@ -963,29 +1083,74 @@ async function loadCompanyTab() {
         <td>${c.id}</td>
         <td><strong>${c.name}</strong></td>
         <td>${c.address || '-'}</td>
+        <td>${c.contact_name || '-'}</td>
+        <td>${c.contact_phone || '-'}</td>
+        <td>${c.contact_email || '-'}</td>
         <td>${c.notes || '-'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">삭제</button></td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditCompanyModal(${c.id},'${(c.name||'').replace(/'/g,"\\'")}','${(c.address||'').replace(/'/g,"\\'")}','${(c.contact_name||'').replace(/'/g,"\\'")}','${(c.contact_phone||'').replace(/'/g,"\\'")}','${(c.contact_email||'').replace(/'/g,"\\'")}','${(c.notes||'').replace(/'/g,"\\'")}')">수정</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">삭제</button>
+        </td>
       </tr>`).join('');
     document.getElementById('companyTableWrap').innerHTML = `
       <table class="data-table">
-        <thead><tr><th>ID</th><th>고객사명</th><th>주소</th><th>비고</th><th>관리</th></tr></thead>
+        <thead><tr><th>ID</th><th>고객사명</th><th>주소</th><th>담당자</th><th>연락처</th><th>메일</th><th>비고</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   } catch (e) { showToast('⚠️ 고객사 로딩 실패'); }
 }
 
 function openAddCompanyModal() {
-  ['c-name','c-address','c-notes'].forEach(id => document.getElementById(id).value = '');
+  ['c-name','c-address','c-contact-name','c-contact-phone','c-contact-email','c-notes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('addCompanyModal').classList.remove('hidden');
 }
 
-async function submitAddCompany() {
-  const name    = document.getElementById('c-name').value.trim();
-  const address = document.getElementById('c-address').value.trim();
-  const notes   = document.getElementById('c-notes').value.trim();
+function openEditCompanyModal(id, name, address, contactName, contactPhone, contactEmail, notes) {
+  document.getElementById('ec-id').value = id;
+  document.getElementById('ec-name').value = name;
+  document.getElementById('ec-address').value = address;
+  document.getElementById('ec-contact-name').value = contactName;
+  document.getElementById('ec-contact-phone').value = contactPhone;
+  document.getElementById('ec-contact-email').value = contactEmail;
+  document.getElementById('ec-notes').value = notes;
+  document.getElementById('editCompanyModal').classList.remove('hidden');
+}
+
+async function submitEditCompany() {
+  const id           = document.getElementById('ec-id').value;
+  const name         = document.getElementById('ec-name').value.trim();
+  const address      = document.getElementById('ec-address').value.trim();
+  const contactName  = document.getElementById('ec-contact-name').value.trim();
+  const contactPhone = document.getElementById('ec-contact-phone').value.trim();
+  const contactEmail = document.getElementById('ec-contact-email').value.trim();
+  const notes        = document.getElementById('ec-notes').value.trim();
   if (!name) { showToast('⚠️ 고객사명을 입력해주세요.'); return; }
   try {
-    await api('POST', '/companies', { name, address: address || null, notes: notes || null });
+    await api('PATCH', `/companies/${id}`, {
+      name,
+      address: address||null,
+      contact_name: contactName||null,
+      contact_phone: contactPhone||null,
+      contact_email: contactEmail||null,
+      notes: notes||null,
+    });
+    closeModal('editCompanyModal');
+    showToast('✅ 고객사 정보가 수정되었습니다.');
+    await loadCompanies();
+    loadCompanyTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function submitAddCompany() {
+  const name         = document.getElementById('c-name').value.trim();
+  const address      = document.getElementById('c-address').value.trim();
+  const contactName  = document.getElementById('c-contact-name').value.trim();
+  const contactPhone = document.getElementById('c-contact-phone').value.trim();
+  const contactEmail = document.getElementById('c-contact-email').value.trim();
+  const notes        = document.getElementById('c-notes').value.trim();
+  if (!name) { showToast('⚠️ 고객사명을 입력해주세요.'); return; }
+  try {
+    await api('POST', '/companies', { name, address: address||null, contact_name: contactName||null, contact_phone: contactPhone||null, contact_email: contactEmail||null, notes: notes||null });
     closeModal('addCompanyModal');
     showToast('✅ 고객사가 추가되었습니다.');
     await loadCompanies();
@@ -1094,11 +1259,43 @@ async function loadMyDeliveries() {
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
 
+function initHistoryFilter() {
+  const yearSel = document.getElementById('historyYear');
+  if (!yearSel || yearSel.options.length > 1) return;
+  const now = new Date();
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y + '년';
+    yearSel.appendChild(opt);
+  }
+  yearSel.value = now.getFullYear();
+  document.getElementById('historyMonth').value = String(now.getMonth() + 1).padStart(2, '0');
+}
+
+function isWithinWeek(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const now = new Date();
+  return (now - d) <= 7 * 24 * 60 * 60 * 1000;
+}
+
 async function loadMyHistory() {
   document.getElementById('myHistoryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
-    const list = await api('GET', '/deliveries/?status=done');
-    document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driver') || emptyMsg('완료된 배송이 없습니다.');
+    const year  = document.getElementById('historyYear')?.value || new Date().getFullYear();
+    const month = document.getElementById('historyMonth')?.value || '';
+    let dateFrom, dateTo;
+    if (month) {
+      dateFrom = `${year}-${month}-01`;
+      const lastDay = new Date(year, parseInt(month), 0).getDate();
+      dateTo = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    } else {
+      dateFrom = `${year}-01-01`;
+      dateTo   = `${year}-12-31`;
+    }
+    const list = await api('GET', `/deliveries/?date_from=${dateFrom}&date_to=${dateTo}`);
+    document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driverHistory') || emptyMsg('배송 기록이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
 
@@ -1161,6 +1358,29 @@ function buildCardActions(d, mode) {
       btns = `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
     return btns;
   } else {
+    // driverHistory 모드: 연/월 조회 탭 (1주일 이내면 상태 수정 가능)
+    if (mode === 'driverHistory') {
+      const canEdit = isWithinWeek(d.scheduled_date);
+      let btns = '';
+      if (d.status === 'done' && isOut)
+        btns += `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
+      if (canEdit && d.status !== 'cancel') {
+        if (isOut) {
+          if (d.status === 'wait')    btns += `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+          if (d.status === 'loaded')  btns += `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
+          if (d.status === 'driving') btns += `<button class="btn btn-primary btn-sm" onclick="confirmUnloaded(${d.id})">📥 하차 완료</button>`;
+          if (d.status === 'unloaded') btns += `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+        } else {
+          if (d.status === 'wait')    btns += `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
+          if (d.status === 'driving') btns += `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
+          if (d.status === 'loaded')  btns += `<button class="btn btn-success btn-sm" onclick="confirmInboundDone(${d.id})">🏁 하차 완료 (완료)</button>`;
+        }
+        if (d.status !== 'wait')
+          btns += `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
+      }
+      return btns;
+    }
+    // driver 모드: 오늘 활성 배송
     if (isOut) {
       if (d.status === 'wait')
         return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
@@ -1557,29 +1777,59 @@ async function loadUsers() {
         <td>${u.name}</td>
         <td>${u.username}</td>
         <td><span class="badge ${roleBadge[u.role]||'badge-wait'}">${roleLabel[u.role]||u.role}</span></td>
+        <td>${u.department || '-'}</td>
+        <td>${u.phone || '-'}</td>
+        <td>${u.email || '-'}</td>
         <td style="text-align:center;">
           <input type="checkbox" ${u.can_create_delivery?'checked':''} onchange="updatePermission(${u.id},'can_create_delivery',this.checked)" ${u.role==='superadmin'?'disabled':''}>
         </td>
         <td style="text-align:center;">
           <input type="checkbox" ${u.can_assign_vehicle?'checked':''} onchange="updatePermission(${u.id},'can_assign_vehicle',this.checked)" ${u.role==='superadmin'?'disabled':''}>
         </td>
-        <td><span style="color:#16a34a;font-weight:600;">활성</span></td>
+        <td>
+          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="openEditUserModal(${u.id},'${u.name}','${u.department||''}','${u.phone||''}','${u.email||''}')">수정</button>
+        </td>
       </tr>
     `).join('');
     document.getElementById('userTableWrap').innerHTML = `
       <table class="data-table">
-        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th><th>배송정보 권한</th><th>배차 권한</th><th>상태</th></tr></thead>
+        <thead><tr><th>ID</th><th>이름</th><th>아이디</th><th>역할</th><th>소속</th><th>연락처</th><th>메일</th><th>배송정보 권한</th><th>배차 권한</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   } catch (e) { showToast('⚠️ 사용자 로딩 실패'); }
 }
 
 function openAddUserModal() {
-  ['u-name','u-username','u-password'].forEach(id => document.getElementById(id).value = '');
+  ['u-name','u-username','u-password','u-department','u-phone','u-email'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('u-role').value = 'driver';
   document.getElementById('u-can-create').checked = false;
   document.getElementById('u-can-assign').checked = false;
   document.getElementById('addUserModal').classList.remove('hidden');
+}
+
+function openEditUserModal(id, name, department, phone, email) {
+  document.getElementById('eu-id').value = id;
+  document.getElementById('eu-name').value = name;
+  document.getElementById('eu-department').value = department;
+  document.getElementById('eu-phone').value = phone;
+  document.getElementById('eu-email').value = email;
+  document.getElementById('editUserModal').classList.remove('hidden');
+}
+
+async function submitEditUser() {
+  const id   = document.getElementById('eu-id').value;
+  const name = document.getElementById('eu-name').value.trim();
+  const department = document.getElementById('eu-department').value.trim();
+  const phone = document.getElementById('eu-phone').value.trim();
+  const email = document.getElementById('eu-email').value.trim();
+  if (!name) { showToast('⚠️ 이름을 입력해주세요.'); return; }
+  try {
+    await api('PATCH', `/users/${id}/info`, { name, department: department||null, phone: phone||null, email: email||null });
+    closeModal('editUserModal');
+    showToast('✅ 사용자 정보가 수정되었습니다.');
+    loadUsers();
+    loadDrivers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 async function updatePermission(userId, field, value) {
@@ -1590,15 +1840,18 @@ async function updatePermission(userId, field, value) {
 }
 
 async function submitAddUser() {
-  const name     = document.getElementById('u-name').value.trim();
-  const username = document.getElementById('u-username').value.trim();
-  const password = document.getElementById('u-password').value;
-  const role     = document.getElementById('u-role').value;
-  const canCreate = document.getElementById('u-can-create')?.checked || false;
-  const canAssign = document.getElementById('u-can-assign')?.checked || false;
+  const name       = document.getElementById('u-name').value.trim();
+  const username   = document.getElementById('u-username').value.trim();
+  const password   = document.getElementById('u-password').value;
+  const role       = document.getElementById('u-role').value;
+  const department = document.getElementById('u-department').value.trim();
+  const phone      = document.getElementById('u-phone').value.trim();
+  const email      = document.getElementById('u-email').value.trim();
+  const canCreate  = document.getElementById('u-can-create')?.checked || false;
+  const canAssign  = document.getElementById('u-can-assign')?.checked || false;
   if (!name || !username || !password) { showToast('⚠️ 필수 항목을 입력해주세요.'); return; }
   try {
-    await api('POST', '/users/', { name, username, password, role, can_create_delivery: canCreate, can_assign_vehicle: canAssign });
+    await api('POST', '/users/', { name, username, password, role, department: department||null, phone: phone||null, email: email||null, can_create_delivery: canCreate, can_assign_vehicle: canAssign });
     closeModal('addUserModal');
     showToast('✅ 사용자가 추가되었습니다.');
     loadUsers();

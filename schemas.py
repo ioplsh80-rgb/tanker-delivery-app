@@ -7,6 +7,18 @@ from datetime import datetime
 class CompanyCreate(BaseModel):
     name: str
     address: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -14,6 +26,9 @@ class CompanyResponse(BaseModel):
     id: int
     name: str
     address: Optional[str]
+    contact_name: Optional[str]
+    contact_email: Optional[str]
+    contact_phone: Optional[str]
     notes: Optional[str]
     is_active: bool
 
@@ -40,12 +55,22 @@ class UserBase(BaseModel):
     name: str
     username: str
     role: str
+    department: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     can_create_delivery: bool = False
     can_assign_vehicle: bool = False
 
 
 class UserCreate(UserBase):
     password: str
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    department: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class UserResponse(UserBase):

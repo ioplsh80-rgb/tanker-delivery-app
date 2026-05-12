@@ -96,6 +96,13 @@ def update_status(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
 
+    # 기사는 7일 이내 배송만 수정 가능
+    if current_user.role == "driver":
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
+        if d.scheduled_date < cutoff:
+            raise HTTPException(status_code=403, detail="7일이 지난 배송은 수정할 수 없습니다.")
+
     if update.status:
         d.status = update.status
     if update.loading_complete_time:
