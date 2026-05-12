@@ -29,7 +29,7 @@ def create_company(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="관리자만 고객사를 추가할 수 있습니다.")
     existing = db.query(models.Company).filter(models.Company.name == company.name).first()
     if existing:
@@ -93,7 +93,7 @@ def delete_company(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="관리자만 고객사를 삭제할 수 있습니다.")
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:

@@ -1352,9 +1352,9 @@ function buildCardActions(d, mode) {
       if (d.status === 'driving')
         btns = `${revert}<button class="btn btn-purple btn-sm" onclick="changeStatus(${d.id},'loaded')">📦 상차완료 처리</button>`;
       if (d.status === 'loaded')
-        btns = `${revert}<button class="btn btn-success btn-sm" onclick="changeStatus(${d.id},'done')">✅ 완료 처리</button>`;
+        btns = `${revert}<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
     }
-    if (d.status === 'done' && isOut)
+    if (d.status === 'done')
       btns = `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
     return btns;
   } else {
@@ -1362,7 +1362,7 @@ function buildCardActions(d, mode) {
     if (mode === 'driverHistory') {
       const canEdit = isWithinWeek(d.scheduled_date);
       let btns = '';
-      if (d.status === 'done' && isOut)
+      if (d.status === 'done')
         btns += `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
       if (canEdit && d.status !== 'cancel') {
         if (isOut) {
@@ -1373,7 +1373,7 @@ function buildCardActions(d, mode) {
         } else {
           if (d.status === 'wait')    btns += `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
           if (d.status === 'driving') btns += `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-          if (d.status === 'loaded')  btns += `<button class="btn btn-success btn-sm" onclick="confirmInboundDone(${d.id})">🏁 하차 완료 (완료)</button>`;
+          if (d.status === 'loaded')  btns += `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
         }
         if (d.status !== 'wait')
           btns += `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
@@ -1396,9 +1396,9 @@ function buildCardActions(d, mode) {
       if (d.status === 'driving')
         return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
       if (d.status === 'loaded')
-        return `<button class="btn btn-success btn-sm" onclick="confirmInboundDone(${d.id})">🏁 하차 완료 (완료)</button>`;
+        return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
     }
-    if (d.status === 'done' && isOut)
+    if (d.status === 'done')
       return `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">📄 계근표 PDF</button>`;
   }
   return '';
@@ -1565,7 +1565,7 @@ function renderDetail(d) {
   `;
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
-  if (d.status === 'done' && isOut)
+  if (d.status === 'done')
     footer += `<button class="btn btn-outline" onclick="downloadPDF(${d.id})">📄 계근표 PDF</button>`;
 
   // 배차 버튼 (배차 권한자)
@@ -1587,7 +1587,7 @@ function renderDetail(d) {
       if (d.status === 'driving')
         footer += `${rv}<button class="btn btn-purple" onclick="changeStatus(${d.id},'loaded')">📦 상차완료</button>`;
       if (d.status === 'loaded')
-        footer += `${rv}<button class="btn btn-success" onclick="changeStatus(${d.id},'done')">✅ 완료 처리</button>`;
+        footer += `${rv}<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
     }
   } else {
     if (isOut) {
@@ -1605,7 +1605,7 @@ function renderDetail(d) {
       if (d.status === 'driving')
         footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
       if (d.status === 'loaded')
-        footer += `<button class="btn btn-success" onclick="confirmInboundDone(${d.id})">🏁 하차 완료 (완료)</button>`;
+        footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
     }
   }
   document.getElementById('detailFooter').innerHTML = footer;
