@@ -17,6 +17,7 @@ class User(Base):
     phone = Column(String(50))                         # 연락처
     can_create_delivery = Column(Boolean, default=False)  # 배송정보 입력 권한
     can_assign_vehicle = Column(Boolean, default=False)   # 배차 권한
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)  # 담당 차량
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

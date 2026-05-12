@@ -225,6 +225,40 @@ async def upload_photos(
     return {"success": True, "photos_uploaded": len(files)}
 
 
+@router.patch("/{delivery_id}/edit")
+def edit_delivery(
+    delivery_id: int,
+    body: schemas.DeliveryEdit,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """배송정보 권한자: 배송 카드 내용 수정"""
+    if current_user.role != "superadmin" and not current_user.can_create_delivery:
+        raise HTTPException(status_code=403, detail="배송 정보 수정 권한이 없습니다.")
+    d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    if body.company is not None:
+        d.company = body.company
+    if body.destination is not None:
+        d.destination = body.destination
+    if body.item_name is not None:
+        d.item_name = body.item_name
+    if body.quantity is not None:
+        d.quantity = body.quantity
+    if body.scheduled_date is not None:
+        d.scheduled_date = body.scheduled_date
+    if body.delivery_time is not None:
+        d.delivery_time = body.delivery_time
+    if body.delivery_type is not None:
+        d.delivery_type = body.delivery_type
+    if body.notes is not None:
+        d.notes = body.notes
+    d.updated_at = datetime.utcnow()
+    db.commit()
+    return {"success": True}
+
+
 @router.delete("/{delivery_id}")
 def delete_delivery(
     delivery_id: int,

@@ -80,6 +80,8 @@ def update_user_info(
         user.email = body.email
     if body.phone is not None:
         user.phone = body.phone
+    if body.vehicle_id is not None:
+        user.vehicle_id = body.vehicle_id if body.vehicle_id != 0 else None
     db.commit()
     db.refresh(user)
     return user

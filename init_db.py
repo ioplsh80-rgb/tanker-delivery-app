@@ -19,6 +19,7 @@ migrations = [
     ("users", "phone",              "VARCHAR(50)"),
     ("users", "can_create_delivery","BOOLEAN DEFAULT FALSE"),
     ("users", "can_assign_vehicle", "BOOLEAN DEFAULT FALSE"),
+    ("users", "vehicle_id",         "INTEGER"),
     # companies 테이블
     ("companies", "contact_name",   "VARCHAR(100)"),
     ("companies", "contact_email",  "VARCHAR(200)"),

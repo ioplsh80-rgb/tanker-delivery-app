@@ -60,6 +60,7 @@ class UserBase(BaseModel):
     phone: Optional[str] = None
     can_create_delivery: bool = False
     can_assign_vehicle: bool = False
+    vehicle_id: Optional[int] = None
 
 
 class UserCreate(UserBase):
@@ -71,6 +72,7 @@ class UserUpdate(BaseModel):
     department: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    vehicle_id: Optional[int] = None
 
 
 class UserResponse(UserBase):
@@ -106,6 +108,17 @@ class DeliveryCreate(BaseModel):
     # 배차 정보 (배차 권한자가 별도 설정, 생성 시 없어도 됨)
     driver_id: Optional[int] = None
     vehicle_number: Optional[str] = None
+
+
+class DeliveryEdit(BaseModel):
+    company: Optional[str] = None
+    destination: Optional[str] = None
+    item_name: Optional[str] = None
+    quantity: Optional[int] = None
+    scheduled_date: Optional[str] = None
+    delivery_time: Optional[str] = None
+    delivery_type: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class DeliveryAssign(BaseModel):
