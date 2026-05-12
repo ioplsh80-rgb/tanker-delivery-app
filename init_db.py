@@ -5,9 +5,44 @@
 import models
 from database import SessionLocal, engine
 from routers.auth import get_password_hash
+from sqlalchemy import text
 
 # 테이블 생성
 models.Base.metadata.create_all(bind=engine)
+
+# ── DB 컬럼 마이그레이션 (새 컬럼이 없으면 추가) ──────────────────
+print("DB 마이그레이션 확인 중...")
+migrations = [
+    # users 테이블
+    ("users", "department",         "VARCHAR(100)"),
+    ("users", "email",              "VARCHAR(200)"),
+    ("users", "phone",              "VARCHAR(50)"),
+    ("users", "can_create_delivery","BOOLEAN DEFAULT FALSE"),
+    ("users", "can_assign_vehicle", "BOOLEAN DEFAULT FALSE"),
+    # companies 테이블
+    ("companies", "contact_name",   "VARCHAR(100)"),
+    ("companies", "contact_email",  "VARCHAR(200)"),
+    ("companies", "contact_phone",  "VARCHAR(50)"),
+    # deliveries 테이블
+    ("deliveries", "delivery_type", "VARCHAR(10) DEFAULT '출하'"),
+    ("deliveries", "driving_time",  "VARCHAR(5)"),
+    ("deliveries", "unloaded_time", "VARCHAR(5)"),
+]
+
+with engine.connect() as conn:
+    db_url = str(engine.url)
+    is_pg = db_url.startswith("postgresql")
+    for table, column, col_type in migrations:
+        try:
+            if is_pg:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"))
+            else:
+                # SQLite: IF NOT EXISTS 미지원, 오류 무시
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+print("✅ 마이그레이션 완료")
 
 db = SessionLocal()
 
