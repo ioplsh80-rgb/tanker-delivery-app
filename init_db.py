@@ -49,20 +49,6 @@ print("✅ 마이그레이션 완료")
 
 db = SessionLocal()
 
-# ── 기존 seed 기사 계정 삭제 (driver01~driver10 → 기사 관리 탭으로 이전) ──
-seed_driver = db.query(models.User).filter(models.User.username == "driver01").first()
-if seed_driver:
-    print("기존 seed 기사 계정 삭제 중...")
-    old_drivers = db.query(models.User).filter(models.User.role == "driver").all()
-    for d in old_drivers:
-        # 해당 기사에 배정된 배송의 driver_id를 NULL 로
-        db.query(models.Delivery).filter(models.Delivery.driver_id == d.id).update(
-            {"driver_id": None}, synchronize_session=False
-        )
-        db.delete(d)
-    db.commit()
-    print(f"  {len(old_drivers)}명의 seed 기사 계정 삭제 완료")
-
 # ── 사용자 ──────────────────────────────────────────────
 if db.query(models.User).count() == 0:
     print("초기 사용자 데이터를 생성합니다...")
