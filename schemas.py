@@ -92,6 +92,10 @@ class UserPermissionUpdate(BaseModel):
     can_assign_vehicle: Optional[bool] = None
 
 
+class PasswordChange(BaseModel):
+    password: str
+
+
 # ── Auth ──────────────────────────────────────────
 class Token(BaseModel):
     access_token: str

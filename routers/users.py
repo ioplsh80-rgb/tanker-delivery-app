@@ -96,7 +96,7 @@ def update_user_info(
 @router.patch("/{user_id}/password")
 def change_password(
     user_id: int,
-    body: dict,
+    body: schemas.PasswordChange,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -106,7 +106,7 @@ def change_password(
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-    user.password_hash = get_password_hash(body.get("password", ""))
+    user.password_hash = get_password_hash(body.password)
     db.commit()
     return {"success": True}
 
