@@ -511,7 +511,7 @@ header h2 { font-size: 16px; font-weight: 700; }
           <input type="date" id="ed-date">
         </div>
         <div class="form-group">
-          <label>배송 시간 *</label>
+          <label>배송 시간</label>
           <input type="time" id="ed-time">
         </div>
       </div>
@@ -2081,7 +2081,7 @@ async function submitEditDelivery() {
   const delivery_time = document.getElementById('ed-time').value;
   const delivery_type = document.getElementById('ed-type').value;
   const notes = document.getElementById('ed-note').value.trim();
-  if (!company || !destination || !item_name || !quantity || !scheduled_date || !delivery_time) {
+  if (!company || !destination || !item_name || !quantity || !scheduled_date) {
     showToast('⚠️ 필수 항목을 모두 입력해주세요.'); return;
   }
   const btn = document.getElementById('editDeliveryBtn');
