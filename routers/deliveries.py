@@ -44,7 +44,10 @@ def _upload_to_drive(contents: bytes, filename: str, mime_type: str) -> Optional
         ).execute()
 
         return file_id
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[Drive 업로드 실패] {e}")
+        traceback.print_exc()
         return None
 
 router = APIRouter()
