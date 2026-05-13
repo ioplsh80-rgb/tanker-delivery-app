@@ -106,7 +106,7 @@ class DeliveryCreate(BaseModel):
     item_name: str                          # 품목
     quantity: int                           # 수량 (Kg)
     scheduled_date: str
-    delivery_time: str                      # 배송시간
+    delivery_time: str = ""                 # 배송시간 (선택)
     delivery_type: str = "출하"             # 출하 / 입하
     notes: Optional[str] = None
     # 배차 정보 (배차 권한자가 별도 설정, 생성 시 없어도 됨)
@@ -159,7 +159,7 @@ class DeliveryResponse(BaseModel):
     driver_id: Optional[int]
     vehicle_number: Optional[str]
     scheduled_date: str
-    delivery_time: str
+    delivery_time: Optional[str] = None
     delivery_type: str = "출하"
     notes: Optional[str]
     status: str

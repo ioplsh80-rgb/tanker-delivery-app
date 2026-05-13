@@ -391,7 +391,7 @@ header h2 { font-size: 16px; font-weight: 700; }
         </div>
         <div class="form-group">
           <label>업체명 *</label>
-          <select id="f-company">
+          <select id="f-company" onchange="onCompanyChange()">
             <option value="">선택하세요</option>
           </select>
         </div>
@@ -421,7 +421,7 @@ header h2 { font-size: 16px; font-weight: 700; }
           <input type="date" id="f-date">
         </div>
         <div class="form-group">
-          <label>배송 시간 *</label>
+          <label>배송 시간</label>
           <input type="time" id="f-time">
         </div>
       </div>
@@ -1158,7 +1158,7 @@ async function loadCompanies() {
     companiesList = await api('GET', '/companies');
     const sel = document.getElementById('f-company');
     sel.innerHTML = '<option value="">선택하세요</option>' +
-      companiesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+      companiesList.map(c => `<option value="${c.name}" data-address="${c.address||''}">${c.name}</option>`).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -1948,6 +1948,13 @@ function renderDetail(d) {
 // ═══════════════════════════════════════════════════
 // 배송 할당
 // ═══════════════════════════════════════════════════
+function onCompanyChange() {
+  const sel = document.getElementById('f-company');
+  const selected = sel.options[sel.selectedIndex];
+  const address = selected ? selected.getAttribute('data-address') : '';
+  if (address) document.getElementById('f-dest').value = address;
+}
+
 function openAssignModal() {
   const today = new Date().toISOString().slice(0, 10);
   ['f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
@@ -1956,7 +1963,7 @@ function openAssignModal() {
   document.getElementById('f-item').value = '';
   document.getElementById('f-qty').value = '';
   document.getElementById('f-date').value = today;
-  document.getElementById('f-time').value = '09:00';
+  document.getElementById('f-time').value = '';
   document.getElementById('assignModal').classList.remove('hidden');
 }
 
@@ -1970,7 +1977,7 @@ async function submitAssign() {
   const time     = document.getElementById('f-time').value;
   const note     = document.getElementById('f-note').value.trim();
 
-  if (!company || !dest || !item || !qty || !date || !time) {
+  if (!company || !dest || !item || !qty || !date) {
     showToast('⚠️ 필수 항목을 모두 입력해주세요.'); return;
   }
 

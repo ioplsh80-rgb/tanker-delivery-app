@@ -62,7 +62,7 @@ class Delivery(Base):
     driver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     vehicle_number = Column(String(20))                     # 차량번호 (배송마다 별도 지정)
     scheduled_date = Column(String(10), nullable=False)     # 배송 날짜
-    delivery_time = Column(String(5), nullable=False)       # 배송 시간
+    delivery_time = Column(String(5), nullable=True, default="")  # 배송 시간 (선택)
 
     delivery_type = Column(String(10), default="출하")       # 출하 / 입하
     notes = Column(Text)                                    # 특이사항
