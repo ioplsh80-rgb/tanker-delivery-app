@@ -482,7 +482,7 @@ header h2 { font-size: 16px; font-weight: 700; }
         </div>
         <div class="form-group">
           <label>업체명 *</label>
-          <select id="ed-company">
+          <select id="ed-company" onchange="onEditCompanyChange()">
             <option value="">선택하세요</option>
           </select>
         </div>
@@ -1949,6 +1949,13 @@ function onCompanyChange() {
   if (address) document.getElementById('f-dest').value = address;
 }
 
+function onEditCompanyChange() {
+  const sel = document.getElementById('ed-company');
+  const selected = sel.options[sel.selectedIndex];
+  const address = selected ? selected.getAttribute('data-address') : '';
+  if (address) document.getElementById('ed-dest').value = address;
+}
+
 function openAssignModal() {
   const today = new Date().toISOString().slice(0, 10);
   ['f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
@@ -2056,7 +2063,7 @@ function openEditDeliveryModal(id) {
   document.getElementById('ed-note').value = d.notes || '';
   const cSel = document.getElementById('ed-company');
   cSel.innerHTML = '<option value="">선택하세요</option>' +
-    companiesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    companiesList.map(c => `<option value="${c.name}" data-address="${c.address||''}">${c.name}</option>`).join('');
   cSel.value = d.company || '';
   const iSel = document.getElementById('ed-item');
   iSel.innerHTML = '<option value="">선택하세요</option>' +
