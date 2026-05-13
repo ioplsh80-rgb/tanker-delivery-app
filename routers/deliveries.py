@@ -17,18 +17,24 @@ from routers.auth import get_current_user
 def _upload_to_drive(contents: bytes, filename: str, mime_type: str) -> Optional[str]:
     """Google Drive에 파일 업로드, 파일 ID 반환. 실패 시 None."""
     try:
-        from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
 
-        json_str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
         folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
-        if not json_str or not folder_id:
+
+        if not all([client_id, client_secret, refresh_token, folder_id]):
             return None
 
-        info = json.loads(json_str)
-        creds = service_account.Credentials.from_service_account_info(
-            info, scopes=["https://www.googleapis.com/auth/drive"]
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri="https://oauth2.googleapis.com/token",
         )
         service = build("drive", "v3", credentials=creds)
 
