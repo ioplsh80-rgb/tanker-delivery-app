@@ -53,6 +53,8 @@ def create_user(
         phone=user.phone,
         can_create_delivery=user.can_create_delivery,
         can_assign_vehicle=user.can_assign_vehicle,
+        vehicle_number=user.vehicle_number,
+        vehicle_type=user.vehicle_type,
     )
     db.add(db_user)
     db.commit()
@@ -98,8 +100,8 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    # 본인 또는 관리자만 변경 가능
-    if current_user.id != user_id and current_user.role != "admin":
+    # 본인, 관리자, 슈퍼관리자 변경 가능
+    if current_user.id != user_id and current_user.role not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:

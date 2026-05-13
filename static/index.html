@@ -776,6 +776,34 @@ header h2 { font-size: 16px; font-weight: 700; }
   </div>
 </div>
 
+<!-- ══ 기사 비밀번호 변경 모달 ══ -->
+<div id="changePasswordModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">비밀번호 변경</h3>
+      <button class="modal-close" onclick="closeModal('changePasswordModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cp-user-id">
+      <div class="form-group">
+        <label id="cp-user-name-label">기사 이름</label>
+      </div>
+      <div class="form-group">
+        <label>새 비밀번호 *</label>
+        <input type="password" id="cp-password" class="form-input" placeholder="새 비밀번호 입력">
+      </div>
+      <div class="form-group">
+        <label>비밀번호 확인 *</label>
+        <input type="password" id="cp-password-confirm" class="form-input" placeholder="비밀번호 재입력">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('changePasswordModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitChangePassword()">변경</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ 차량 추가 모달 ══ -->
 <div id="addVehicleModal" class="modal-overlay hidden">
   <div class="modal">
@@ -1160,6 +1188,8 @@ async function loadDriverMgmt() {
         <td>
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;"
             onclick="openEditDriverMgmtModal(${u.id},'${(u.name||'').replace(/'/g,"\'")}','${(u.phone||'').replace(/'/g,"\'")}','${(u.email||'').replace(/'/g,"\'")}','${(u.department||'').replace(/'/g,"\'")}','${(u.vehicle_number||'').replace(/'/g,"\'")}','${(u.vehicle_type||'').replace(/'/g,"\'")}')">수정</button>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;margin-right:4px;"
+            onclick="openChangePasswordModal(${u.id},'${(u.name||'').replace(/'/g,"\\'")}')">비밀번호</button>
           <button class="btn btn-danger btn-sm" onclick="deleteDriverMgmt(${u.id})">삭제</button>
         </td>
       </tr>`;
@@ -1250,6 +1280,27 @@ async function submitEditDriverMgmt() {
     showToast('기사 정보가 수정되었습니다.');
     loadDriverMgmt();
     loadDrivers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+function openChangePasswordModal(userId, userName) {
+  document.getElementById('cp-user-id').value = userId;
+  document.getElementById('cp-user-name-label').textContent = `대상: ${userName}`;
+  document.getElementById('cp-password').value = '';
+  document.getElementById('cp-password-confirm').value = '';
+  document.getElementById('changePasswordModal').classList.remove('hidden');
+}
+
+async function submitChangePassword() {
+  const id  = document.getElementById('cp-user-id').value;
+  const pw  = document.getElementById('cp-password').value;
+  const pw2 = document.getElementById('cp-password-confirm').value;
+  if (!pw) { showToast('⚠️ 새 비밀번호를 입력해주세요.'); return; }
+  if (pw !== pw2) { showToast('⚠️ 비밀번호가 일치하지 않습니다.'); return; }
+  try {
+    await api('PATCH', `/users/${id}/password`, { password: pw });
+    closeModal('changePasswordModal');
+    showToast('비밀번호가 변경되었습니다.');
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
