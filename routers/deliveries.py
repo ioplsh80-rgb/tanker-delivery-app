@@ -1,4 +1,7 @@
 import base64
+import io
+import json
+import os
 from datetime import datetime
 from typing import List, Optional
 
@@ -9,6 +12,40 @@ import models
 import schemas
 from database import get_db
 from routers.auth import get_current_user
+
+
+def _upload_to_drive(contents: bytes, filename: str, mime_type: str) -> Optional[str]:
+    """Google Drive에 파일 업로드, 파일 ID 반환. 실패 시 None."""
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseUpload
+
+        json_str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+        if not json_str or not folder_id:
+            return None
+
+        info = json.loads(json_str)
+        creds = service_account.Credentials.from_service_account_info(
+            info, scopes=["https://www.googleapis.com/auth/drive"]
+        )
+        service = build("drive", "v3", credentials=creds)
+
+        file_metadata = {"name": filename, "parents": [folder_id]}
+        media = MediaIoBaseUpload(io.BytesIO(contents), mimetype=mime_type)
+        file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        file_id = file.get("id")
+
+        # 누구나 링크로 볼 수 있도록 공개
+        service.permissions().create(
+            fileId=file_id,
+            body={"role": "reader", "type": "anyone"},
+        ).execute()
+
+        return file_id
+    except Exception:
+        return None
 
 router = APIRouter()
 
@@ -215,12 +252,23 @@ async def upload_photos(
     for file in files:
         contents = await file.read()
         mime = file.content_type or "image/jpeg"
-        photo_data = f"data:{mime};base64," + base64.b64encode(contents).decode()
-        db.add(models.DeliveryPhoto(
-            delivery_id=delivery_id,
-            photo_data=photo_data,
-            filename=file.filename,
-        ))
+        fname = file.filename or "photo.jpg"
+
+        drive_id = _upload_to_drive(contents, fname, mime)
+        if drive_id:
+            db.add(models.DeliveryPhoto(
+                delivery_id=delivery_id,
+                photo_data="",
+                drive_file_id=drive_id,
+                filename=fname,
+            ))
+        else:
+            photo_data = f"data:{mime};base64," + base64.b64encode(contents).decode()
+            db.add(models.DeliveryPhoto(
+                delivery_id=delivery_id,
+                photo_data=photo_data,
+                filename=fname,
+            ))
 
     d.status = "done"
     d.complete_time = datetime.now().strftime("%H:%M")

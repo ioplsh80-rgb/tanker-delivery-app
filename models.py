@@ -105,7 +105,8 @@ class DeliveryPhoto(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False)
-    photo_data = Column(Text, nullable=False)              # base64 인코딩
+    photo_data = Column(Text, nullable=False, default="")  # base64 인코딩 (레거시)
+    drive_file_id = Column(String(200))                    # Google Drive 파일 ID
     filename = Column(String(200))
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 

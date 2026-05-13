@@ -142,6 +142,7 @@ class DeliveryUpdate(BaseModel):
 class PhotoResponse(BaseModel):
     id: int
     photo_data: str
+    drive_file_id: Optional[str] = None
     filename: Optional[str]
     uploaded_at: datetime
 
