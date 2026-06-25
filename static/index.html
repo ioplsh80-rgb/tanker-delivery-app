@@ -1836,7 +1836,7 @@ function renderDetail(d) {
   const photosHTML = d.photos && d.photos.length
     ? `<div class="photo-preview-grid">${d.photos.map(p => {
         const src = p.drive_file_id
-          ? `https://lh3.googleusercontent.com/d/${p.drive_file_id}`
+          ? `https://drive.google.com/thumbnail?id=${p.drive_file_id}&sz=w800`
           : p.photo_data;
         return `<div class="photo-thumb"><img src="${src}" onclick="viewPhoto('${src}')"></div>`;
       }).join('')}</div>`
