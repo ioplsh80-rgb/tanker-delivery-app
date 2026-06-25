@@ -35,6 +35,13 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .badge-cancel   { background: #fee2e2; color: #991b1b; }
 .badge-progress { background: #fed7aa; color: #9a3412; }
 
+/* 기사 카드 미니 스텝바 */
+.mini-steps { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
+.mini-step { font-size: 10px; padding: 2px 6px; border-radius: 99px; background: #f3f4f6; color: #9ca3af; white-space: nowrap; }
+.mini-step.done { background: #dcfce7; color: #166534; }
+.mini-step.active { background: #fef3c7; color: #92400e; font-weight: 700; border: 1.5px solid #f59e0b; }
+.mini-step-arrow { font-size: 10px; color: #d1d5db; }
+
 /* ── 로그인 ── */
 #loginPage { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3a5f, #2563eb); }
 .login-box { background: #fff; border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
@@ -984,6 +991,22 @@ function cardBadgeClass(status) {
   return STATUS_BADGE[status] || '';
 }
 
+function driverStatusSteps(d) {
+  const isOut = (d.delivery_type || '출하') === '출하';
+  const steps = isOut
+    ? ['wait', 'loaded', 'driving', 'unloaded', 'done']
+    : ['wait', 'driving', 'loaded', 'done'];
+  const labels = isOut
+    ? ['대기중', '상차완료', '운행중', '하차완료', '완료']
+    : ['대기중', '운행중', '상차완료', '완료'];
+  const curIdx = steps.indexOf(d.status);
+  return `<div class="mini-steps">${steps.map((s, i) => {
+    const cls = i < curIdx ? 'done' : (i === curIdx ? 'active' : '');
+    return (i > 0 ? '<span class="mini-step-arrow">›</span>' : '') +
+      `<span class="mini-step ${cls}">${labels[i]}</span>`;
+  }).join('')}</div>`;
+}
+
 // ═══════════════════════════════════════════════════
 // API 유틸
 // ═══════════════════════════════════════════════════
@@ -1613,7 +1636,7 @@ async function loadMyHistory() {
       dateTo   = `${year}-12-31`;
     }
     const all = await api('GET', `/deliveries/?date_from=${dateFrom}&date_to=${dateTo}`);
-    const list = all.filter(d => d.status !== 'cancel');
+    const list = all.filter(d => d.status === 'done');
     document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driverHistory') || emptyMsg('배송 기록이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
@@ -1629,7 +1652,11 @@ function renderDeliveryCards(list, mode) {
 
 function deliveryCardHTML(d, mode) {
   const driverName = d.driver_user ? d.driver_user.name : '-';
-  const actions = buildCardActions(d, mode);
+  const isDriverMode = (mode === 'driver' || mode === 'driverHistory');
+  const actions = isDriverMode ? '' : buildCardActions(d, mode);
+  const statusArea = isDriverMode
+    ? driverStatusSteps(d)
+    : `<span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>`;
   return `
   <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
     <div class="card-header">
@@ -1637,7 +1664,7 @@ function deliveryCardHTML(d, mode) {
         <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${d.scheduled_date} ${d.delivery_time}</div>
         <div class="card-company">${d.company}</div>
       </div>
-      <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
+      ${statusArea}
     </div>
     <div class="card-meta">
       <div><div class="meta-label">목적지</div><div class="meta-val">📍 ${d.destination}</div></div>
