@@ -1,7 +1,9 @@
 import io
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
+
+KST = timezone(timedelta(hours=9))
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -68,7 +70,7 @@ def export_excel(
     ws.row_dimensions[1].height = 34
 
     ws.merge_cells("A2:P2")
-    ws["A2"] = f"출력일: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M')}"
+    ws["A2"] = f"출력일: {datetime.now(KST).strftime('%Y년 %m월 %d일 %H:%M')}"
     ws["A2"].font = Font(size=10, color="6B7280")
     ws["A2"].alignment = Alignment(horizontal="right", vertical="center")
     ws.row_dimensions[2].height = 18
@@ -137,7 +139,7 @@ def export_excel(
     wb.save(buf)
     buf.seek(0)
 
-    filename = f"배송목록_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    filename = f"배송목록_{datetime.now(KST).strftime('%Y%m%d')}.xlsx"
     encoded = quote(filename)
     return StreamingResponse(
         buf,

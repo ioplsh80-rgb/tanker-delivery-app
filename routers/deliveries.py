@@ -2,8 +2,10 @@ import base64
 import io
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+
+KST = timezone(timedelta(hours=9))
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import or_
@@ -414,6 +416,13 @@ def revert_status(
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
 
+    # 취소 철회: 취소 상태는 대기중으로 복구
+    if d.status == "cancel":
+        d.status = "wait"
+        d.updated_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "new_status": "wait"}
+
     flow = get_flow(d.delivery_type)
 
     if d.status not in flow:
@@ -480,7 +489,7 @@ async def upload_photos(
             ))
 
     d.status = "done"
-    d.complete_time = datetime.now().strftime("%H:%M")
+    d.complete_time = datetime.now(KST).strftime("%H:%M")
     d.complete_memo = complete_memo
     d.updated_at = datetime.utcnow()
     db.commit()

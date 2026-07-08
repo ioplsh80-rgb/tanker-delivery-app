@@ -1205,9 +1205,9 @@ async function loadDriverMgmt() {
         <td>${vehTxt}</td>
         <td>
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;"
-            onclick="openEditDriverMgmtModal(${u.id},'${(u.name||'').replace(/'/g,"\'")}','${(u.phone||'').replace(/'/g,"\'")}','${(u.email||'').replace(/'/g,"\'")}','${(u.department||'').replace(/'/g,"\'")}','${(u.vehicle_number||'').replace(/'/g,"\'")}','${(u.vehicle_type||'').replace(/'/g,"\'")}')">수정</button>
+            onclick="openEditDriverMgmtModal(${u.id},'${escArg(u.name)}','${escArg(u.phone)}','${escArg(u.email)}','${escArg(u.department)}','${escArg(u.vehicle_number)}','${escArg(u.vehicle_type)}')">수정</button>
           <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;margin-right:4px;"
-            onclick="openChangePasswordModal(${u.id},'${(u.name||'').replace(/'/g,"\\'")}')">비밀번호</button>
+            onclick="openChangePasswordModal(${u.id},'${escArg(u.name)}')">비밀번호</button>
           <button class="btn btn-danger btn-sm" onclick="deleteDriverMgmt(${u.id})">삭제</button>
         </td>
       </tr>`;
@@ -1376,7 +1376,7 @@ async function loadCompanyTab() {
         <td>${c.contact_email || '-'}</td>
         <td>${c.notes || '-'}</td>
         <td style="white-space:nowrap;">
-          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditCompanyModal(${c.id},'${(c.name||'').replace(/'/g,"\\'")}','${(c.address||'').replace(/'/g,"\\'")}','${(c.contact_name||'').replace(/'/g,"\\'")}','${(c.contact_phone||'').replace(/'/g,"\\'")}','${(c.contact_email||'').replace(/'/g,"\\'")}','${(c.notes||'').replace(/'/g,"\\'")}')">수정</button>
+          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditCompanyModal(${c.id},'${escArg(c.name)}','${escArg(c.address)}','${escArg(c.contact_name)}','${escArg(c.contact_phone)}','${escArg(c.contact_email)}','${escArg(c.notes)}')">수정</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">삭제</button>
         </td>
       </tr>`).join('');
@@ -1746,28 +1746,30 @@ function buildCardActions(d, mode) {
   const revert = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
 
   if (mode === 'admin') {
-    let btns = '';
+    const parts = [];
     // 배차 미등록 카드에 배차 버튼 표시
     if (!d.driver_id && currentUser && (currentUser.role === 'superadmin' || currentUser.can_assign_vehicle))
-      btns = `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssignVehicleModal(${d.id})">🚛 배차 등록</button>`;
+      parts.push(`<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openAssignVehicleModal(${d.id})">🚛 배차 등록</button>`);
     if (d.status === 'wait' && d.driver_id)
-      btns += `<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
+      parts.push(`<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`);
+    if (d.status === 'cancel')
+      parts.push(`<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 취소 철회</button>`);
     if (isOut) {
       if (d.status === 'loaded')
-        btns = `${revert}<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`;
+        parts.push(revert, `<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`);
       if (d.status === 'driving')
-        btns = `${revert}<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'unloaded')">📥 하차완료 처리</button>`;
+        parts.push(revert, `<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'unloaded')">📥 하차완료 처리</button>`);
       if (d.status === 'unloaded')
-        btns = `${revert}<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">✅ 완료 처리</button>`;
+        parts.push(revert, `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">✅ 완료 처리</button>`);
     } else {
       if (d.status === 'driving')
-        btns = `${revert}<button class="btn btn-purple btn-sm" onclick="changeStatus(${d.id},'loaded')">📦 상차완료 처리</button>`;
+        parts.push(revert, `<button class="btn btn-purple btn-sm" onclick="changeStatus(${d.id},'loaded')">📦 상차완료 처리</button>`);
       if (d.status === 'loaded')
-        btns = `${revert}<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+        parts.push(revert, `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`);
     }
     if (currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
-      btns += `<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="event.stopPropagation();openEditDeliveryModal(${d.id})">✏️ 수정</button>`;
-    return btns;
+      parts.push(`<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="event.stopPropagation();openEditDeliveryModal(${d.id})">✏️ 수정</button>`);
+    return parts.join('');
   } else {
     // driverHistory 모드: 연/월 조회 탭 (1주일 이내면 상태 수정 가능)
     if (mode === 'driverHistory') {
@@ -1916,7 +1918,7 @@ function renderDetail(d) {
 
   const stepsHTML = steps.map((s, i) => {
     const cls = i < curIdx ? 'past' : (i === curIdx ? 'active' : '');
-    return `<span class="status-step ${cls}">${stepLabels[i]}</span>${i < 3 ? '<span class="s-arrow">▶</span>' : ''}`;
+    return `<span class="status-step ${cls}">${stepLabels[i]}</span>${i < steps.length - 1 ? '<span class="s-arrow">▶</span>' : ''}`;
   }).join('');
 
   const photosHTML = d.photos && d.photos.length
@@ -2036,6 +2038,8 @@ function renderDetail(d) {
     const rv = `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
     if (d.status === 'wait')
       footer += `<button class="btn btn-danger" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
+    if (d.status === 'cancel')
+      footer += `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 취소 철회</button>`;
     if (isOut) {
       if (d.status === 'loaded')
         footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`;
@@ -2373,7 +2377,7 @@ async function loadUsers() {
           <input type="checkbox" ${u.can_assign_vehicle?'checked':''} onchange="updatePermission(${u.id},'can_assign_vehicle',this.checked)" ${u.role==='superadmin'?'disabled':''}>
         </td>
         <td>
-          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="openEditUserModal(${u.id},'${u.name}','${u.department||''}','${u.phone||''}','${u.email||''}')">수정</button>
+          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="openEditUserModal(${u.id},'${escArg(u.name)}','${escArg(u.department)}','${escArg(u.phone)}','${escArg(u.email)}')">수정</button>
         </td>
       </tr>
     `).join('');
@@ -2540,6 +2544,15 @@ function renderChatMsg(m) {
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// 인라인 onclick의 '...' 문자열 인자용 이스케이프
+function escArg(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
 }
 
 function formatChatTime(iso) {
