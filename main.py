@@ -11,9 +11,10 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="탱크로리 배송 관리 시스템", version="1.0.0", redirect_slashes=False)
 
+# 쿠키 인증 사용으로 출처를 자체 도메인으로 제한 (와일드카드 + 쿠키 조합은 위험)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://web-production-39d95.up.railway.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

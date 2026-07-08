@@ -1005,7 +1005,8 @@ header h2 { font-size: 16px; font-weight: 700; }
 // ═══════════════════════════════════════════════════
 // 전역 상태
 // ═══════════════════════════════════════════════════
-let token = localStorage.getItem('token') || '';
+// 인증 토큰은 HttpOnly 쿠키로 관리 (자바스크립트 접근 불가)
+localStorage.removeItem('token');  // 예전 방식 토큰 정리
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let drivers = [];
 let itemsList = [];
@@ -1053,7 +1054,7 @@ function driverStatusSteps(d) {
 // API 유틸
 // ═══════════════════════════════════════════════════
 async function api(method, path, body = null, isForm = false) {
-  const opts = { method, headers: { Authorization: `Bearer ${token}` } };
+  const opts = { method, headers: {} };  // 인증은 HttpOnly 쿠키가 자동 전송됨
   if (body) {
     if (isForm) {
       opts.body = body;
@@ -1099,9 +1100,8 @@ async function doLogin() {
       return;
     }
     const data = await res.json();
-    token = data.access_token;
+    // 토큰은 서버가 HttpOnly 쿠키로 저장 - 프론트에는 사용자 정보만 보관
     currentUser = data.user;
-    localStorage.setItem('token', token);
     localStorage.setItem('currentUser', JSON.stringify(currentUser));
     initApp();
   } catch (e) {
@@ -1112,7 +1112,8 @@ async function doLogin() {
 }
 
 function doLogout() {
-  token = ''; currentUser = null;
+  fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});  // 서버 쿠키 삭제
+  currentUser = null;
   localStorage.removeItem('token'); localStorage.removeItem('currentUser');
   document.getElementById('appPage').classList.add('hidden');
   document.getElementById('loginPage').classList.remove('hidden');
@@ -1158,7 +1159,7 @@ async function initApp() {
   }
 }
 
-if (token && currentUser) { initApp(); }
+if (currentUser) { initApp(); }  // 쿠키가 만료됐으면 첫 API 호출의 401 처리로 로그인 화면 이동
 
 // ═══════════════════════════════════════════════════
 // 탭 전환
@@ -1554,10 +1555,9 @@ async function uploadNoticePhoto(input, noticeId, companyId) {
   const formData = new FormData();
   formData.append('file', file);
   try {
-    const token = localStorage.getItem('token');
     showToast('📤 사진 업로드 중...');
     const res = await fetch(`/api/companies/${companyId}/notices/${noticeId}/photo`, {
-      method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
+      method: 'POST', body: formData
     });
     if(!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -2381,7 +2381,6 @@ async function submitComplete() {
     form.append('complete_memo', memo);
     const res = await fetch(`/api/deliveries/${currentActionId}/photos`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
     if (!res.ok) {

@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -15,7 +15,8 @@ from database import get_db
 router = APIRouter()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+COOKIE_NAME = "access_token"
 
 SECRET_KEY = os.getenv("SECRET_KEY", "tanker-delivery-secret-key-2024")
 ALGORITHM = "HS256"
@@ -38,10 +39,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> models.User:
     credentials_exc = HTTPException(status_code=401, detail="인증에 실패했습니다.")
+    # Authorization 헤더가 없으면 HttpOnly 쿠키에서 토큰 확인
+    if not token:
+        token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise credentials_exc
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -58,6 +65,7 @@ def get_current_user(
 
 @router.post("/login", response_model=schemas.Token)
 def login(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
@@ -68,7 +76,20 @@ def login(
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다.")
 
     token = create_access_token({"sub": user.username})
+    # HttpOnly 쿠키: 자바스크립트에서 접근 불가 (XSS로 토큰 탈취 방지)
+    response.set_cookie(
+        key=COOKIE_NAME, value=token,
+        httponly=True, secure=True, samesite="lax",
+        max_age=TOKEN_EXPIRE_MINUTES * 60, path="/",
+    )
+    # access_token은 외부 스크립트(기사 일괄등록 등) 호환을 위해 응답에도 유지
     return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"success": True}
 
 
 @router.get("/me", response_model=schemas.UserResponse)
