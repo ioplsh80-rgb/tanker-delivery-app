@@ -61,6 +61,13 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .chat-attach-btn { display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:#f3f4f6;cursor:pointer;font-size:16px;border:1px solid #d1d5db; }
 .chat-send-btn { width:36px;height:36px;border-radius:50%;background:#2563eb;color:#fff;border:none;cursor:pointer;font-size:15px; }
 .chat-unread-badge { display:inline-flex;align-items:center;gap:3px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:6px; }
+.viewer-details { border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb; }
+.viewer-details summary { cursor:pointer;padding:10px 12px;font-weight:600;font-size:14px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none; }
+.viewer-details summary::-webkit-details-marker { display:none; }
+.viewer-details summary::after { content:'▸';margin-left:auto;color:#9ca3af;transition:transform .15s; }
+.viewer-details[open] summary::after { transform:rotate(90deg); }
+.viewer-details .viewer-body { padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px; }
+.viewer-count { color:#2563eb;font-size:12px;font-weight:500; }
 
 /* 기사 카드 미니 스텝바 */
 .mini-steps { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
@@ -463,9 +470,14 @@ header h2 { font-size: 16px; font-weight: 700; }
         <label>특이사항</label>
         <textarea id="f-note" rows="3" placeholder="위험물 취급 주의사항, 현장 특이사항 등"></textarea>
       </div>
-      <div class="form-group" id="f-viewers-group" style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;">
-        <label>👁 공개할 관리자 <span style="color:#6b7280;font-size:12px;font-weight:400;">(본인과 슈퍼관리자는 항상 볼 수 있습니다)</span></label>
-        <div id="f-viewers" style="display:flex;flex-direction:column;gap:6px;font-size:13px;"></div>
+      <div class="form-group" id="f-viewers-group" style="margin-top:12px;">
+        <details class="viewer-details" id="f-viewers-details">
+          <summary>👁 공개할 관리자 <span class="viewer-count" id="f-viewers-count"></span></summary>
+          <div class="viewer-body">
+            <div style="color:#6b7280;font-size:12px;">본인과 슈퍼관리자는 항상 볼 수 있습니다</div>
+            <div id="f-viewers" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </details>
       </div>
     </div>
     <div class="modal-footer">
@@ -2094,9 +2106,14 @@ function renderDetail(d) {
 
     ${(currentUser.role === 'superadmin' || (currentUser.role === 'admin' && d.created_by === currentUser.id)) ? `
     <div class="detail-section">
-      <h4>👁 공개 대상 관리자 <span style="color:#6b7280;font-size:12px;font-weight:400;">(생성자·슈퍼관리자는 항상 열람)</span></h4>
-      <div id="detail-viewers" style="display:flex;flex-direction:column;gap:6px;font-size:13px;margin-bottom:8px;"></div>
-      <button class="btn btn-sm btn-outline" onclick="saveDetailViewers(${d.id})">💾 공개 설정 저장</button>
+      <details class="viewer-details">
+        <summary>👁 공개 대상 관리자 <span class="viewer-count" id="detail-viewers-count"></span></summary>
+        <div class="viewer-body">
+          <div style="color:#6b7280;font-size:12px;">생성자와 슈퍼관리자는 항상 열람할 수 있습니다</div>
+          <div id="detail-viewers" style="display:flex;flex-direction:column;gap:6px;"></div>
+          <button class="btn btn-sm btn-outline" style="align-self:flex-start;" onclick="saveDetailViewers(${d.id})">💾 공개 설정 저장</button>
+        </div>
+      </details>
     </div>` : ''}
 
     <div class="detail-section">
@@ -2221,13 +2238,21 @@ async function renderViewerChecklist(containerId, checkedIds) {
   }
   box.innerHTML = others.map(a => `
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
-      <input type="checkbox" class="viewer-chk" value="${a.id}" ${checkedIds.includes(a.id) ? 'checked' : ''}>
+      <input type="checkbox" class="viewer-chk" value="${a.id}" ${checkedIds.includes(a.id) ? 'checked' : ''} onchange="updateViewerCount('${containerId}')">
       ${escapeHtml(a.name)}${a.department ? ` <span style="color:#9ca3af;font-size:12px;">(${escapeHtml(a.department)})</span>` : ''}
     </label>`).join('');
+  updateViewerCount(containerId);
 }
 
 function collectViewerIds(containerId) {
   return [...document.querySelectorAll(`#${containerId} .viewer-chk:checked`)].map(c => parseInt(c.value));
+}
+
+function updateViewerCount(containerId) {
+  const el = document.getElementById(containerId + '-count');
+  if (!el) return;
+  const n = collectViewerIds(containerId).length;
+  el.textContent = n > 0 ? `${n}명 선택됨` : '선택 안 함';
 }
 
 async function saveDetailViewers(deliveryId) {
