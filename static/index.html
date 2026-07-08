@@ -31,6 +31,8 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .badge-wait     { background: #fef3c7; color: #92400e; }
 .badge-loaded   { background: #ede9fe; color: #5b21b6; }
 .badge-departed { background: #dbeafe; color: #1e40af; }
+.badge-driving  { background: #dbeafe; color: #1e40af; }
+.badge-unloaded { background: #ccfbf1; color: #0f766e; }
 .badge-done     { background: #dcfce7; color: #166534; }
 .badge-cancel   { background: #fee2e2; color: #991b1b; }
 .badge-progress { background: #fed7aa; color: #9a3412; }
@@ -118,8 +120,7 @@ header h2 { font-size: 16px; font-weight: 700; }
 .stat-num { font-size: 26px; font-weight: 800; }
 .stat-label { font-size: 11px; color: #6b7280; margin-top: 4px; }
 .stat-card.s-wait .stat-num     { color: #d97706; }
-.stat-card.s-loaded .stat-num   { color: #7c3aed; }
-.stat-card.s-departed .stat-num { color: #2563eb; }
+.stat-card.s-progress .stat-num { color: #2563eb; }
 .stat-card.s-done .stat-num     { color: #16a34a; }
 .stat-card.s-total .stat-num    { color: #1e3a5f; }
 
@@ -140,7 +141,8 @@ header h2 { font-size: 16px; font-weight: 700; }
 .delivery-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
 .delivery-card.wait     { border-left-color: #d97706; }
 .delivery-card.loaded   { border-left-color: #7c3aed; }
-.delivery-card.departed { border-left-color: #2563eb; }
+.delivery-card.driving  { border-left-color: #2563eb; }
+.delivery-card.unloaded { border-left-color: #0d9488; }
 .delivery-card.done     { border-left-color: #16a34a; }
 .delivery-card.cancel   { border-left-color: #dc2626; }
 .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
@@ -289,13 +291,9 @@ header h2 { font-size: 16px; font-weight: 700; }
           <div class="stat-num" id="stat-wait">-</div>
           <div class="stat-label">⏳ 대기중</div>
         </div>
-        <div class="stat-card s-loaded">
-          <div class="stat-num" id="stat-loaded">-</div>
-          <div class="stat-label">📦 상차완료</div>
-        </div>
-        <div class="stat-card s-departed">
-          <div class="stat-num" id="stat-departed">-</div>
-          <div class="stat-label">🚛 출발</div>
+        <div class="stat-card s-progress">
+          <div class="stat-num" id="stat-progress">-</div>
+          <div class="stat-label">🚛 진행중</div>
         </div>
         <div class="stat-card s-done">
           <div class="stat-num" id="stat-done">-</div>
@@ -328,7 +326,8 @@ header h2 { font-size: 16px; font-weight: 700; }
           <option value="">전체 상태</option>
           <option value="wait">대기중</option>
           <option value="loaded">상차완료</option>
-          <option value="departed">출발</option>
+          <option value="driving">운행중</option>
+          <option value="unloaded">하차완료</option>
           <option value="done">완료</option>
           <option value="cancel">취소</option>
         </select>
@@ -1034,8 +1033,8 @@ const STATUS_LABELS = {
   done: '완료', cancel: '취소'
 };
 const STATUS_BADGE = {
-  wait: 'badge-wait', loaded: 'badge-loaded', driving: 'badge-departed',
-  unloaded: 'badge-loaded', done: 'badge-done', cancel: 'badge-cancel'
+  wait: 'badge-wait', loaded: 'badge-loaded', driving: 'badge-driving',
+  unloaded: 'badge-unloaded', done: 'badge-done', cancel: 'badge-cancel'
 };
 
 function cardBadgeLabel(status) {
@@ -1691,8 +1690,7 @@ async function loadDashboard() {
   try {
     const list = await api('GET', `/deliveries/?date=${today}`);
     document.getElementById('stat-wait').textContent     = list.filter(d => d.status === 'wait').length;
-    document.getElementById('stat-loaded').textContent   = list.filter(d => d.status === 'loaded').length;
-    document.getElementById('stat-departed').textContent = list.filter(d => d.status === 'departed').length;
+    document.getElementById('stat-progress').textContent = list.filter(d => ['loaded','driving','unloaded'].includes(d.status)).length;
     document.getElementById('stat-done').textContent     = list.filter(d => d.status === 'done').length;
     document.getElementById('stat-total').textContent    = list.length;
     document.getElementById('dashboardList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('오늘 배송이 없습니다.');
@@ -1735,7 +1733,7 @@ async function loadDriverStatus() {
     const list = await api('GET', `/deliveries/?date=${today}`);
     const html = drivers.map(dr => {
       const myD     = list.filter(d => d.driver_id === dr.id);
-      const active  = myD.find(d => d.status === 'loaded' || d.status === 'departed');
+      const active  = myD.find(d => ['loaded','driving','unloaded'].includes(d.status));
       const doneC   = myD.filter(d => d.status === 'done').length;
       const waitC   = myD.filter(d => d.status === 'wait').length;
       const curVeh  = active ? active.vehicle_number : '-';
@@ -1748,7 +1746,7 @@ async function loadDriverStatus() {
             <div class="driver-name">👷 ${dr.name}</div>
             <div style="font-size:12px;color:#6b7280;margin-top:2px;">현재 차량: ${curVeh}</div>
           </div>
-          <span class="badge ${active ? 'badge-departed' : 'badge-wait'}">${active ? STATUS_LABELS[active.status] : '대기중'}</span>
+          <span class="badge ${active ? 'badge-progress' : 'badge-wait'}">${active ? STATUS_LABELS[active.status] : '대기 가능'}</span>
         </div>
         <div class="driver-status-text">${statusText}</div>
         <div class="driver-stats">
