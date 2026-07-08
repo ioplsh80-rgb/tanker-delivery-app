@@ -18,7 +18,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 COOKIE_NAME = "access_token"
 
-SECRET_KEY = os.getenv("SECRET_KEY", "tanker-delivery-secret-key-2024")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY 환경변수가 설정되지 않았습니다. "
+        "Railway Variables에 무작위 SECRET_KEY를 등록한 뒤 다시 배포하세요."
+    )
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7일
 

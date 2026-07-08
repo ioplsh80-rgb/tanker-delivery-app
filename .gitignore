@@ -4,3 +4,4 @@ __pycache__/
 delivery.db
 *.db
 .env
+client_secret_*.json
