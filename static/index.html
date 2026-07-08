@@ -1504,12 +1504,12 @@ async function loadNotices(companyId) {
   const list = document.getElementById('ec-notice-list');
   list.innerHTML = '<div style="color:#9ca3af;font-size:13px;">불러오는 중...</div>';
   try {
-    const companies = await api('GET', '/companies/');
+    const companies = await api('GET', '/companies');
     const company = companies.find(c => c.id == companyId);
     const notices = company ? (company.notices || []) : [];
     renderNoticeList(notices, companyId);
   } catch(e) {
-    list.innerHTML = '';
+    list.innerHTML = '<div style="color:#dc2626;font-size:13px;">주의사항을 불러오지 못했습니다. 다시 열어주세요.</div>';
   }
 }
 
