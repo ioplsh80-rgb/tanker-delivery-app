@@ -2666,7 +2666,7 @@ function renderChatMsg(m) {
     : '';
   const text = m.content ? `<div class="chat-bubble">${escapeHtml(m.content)}</div>` : '';
   return `<div class="chat-msg ${mine ? 'mine' : 'other'}">
-    ${mine ? '' : `<div class="chat-sender">${escapeHtml(m.user_name)} (${roleLabel})</div>`}
+    <div class="chat-sender">${escapeHtml(m.user_name)} (${roleLabel})${mine ? ' · 나' : ''}</div>
     ${text}${img}
     <div class="chat-time">${formatChatTime(m.created_at)}</div>
   </div>`;
