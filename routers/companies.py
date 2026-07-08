@@ -108,7 +108,10 @@ def _upload_notice_photo(contents: bytes, filename: str, mime_type: str):
         file_id = file.get("id")
         service.permissions().create(fileId=file_id, body={"role": "reader", "type": "anyone"}).execute()
         return file_id
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[주의사항 사진 업로드 실패] {e}")
+        traceback.print_exc()
         return None
 
 
@@ -196,10 +199,11 @@ async def upload_notice_photo(
     mime = file.content_type or "image/jpeg"
     fname = f"notice_{company_id}_{notice_id}_{file.filename}"
     drive_id = _upload_notice_photo(contents, fname, mime)
-    if drive_id:
-        notice.drive_file_id = drive_id
-        db.commit()
-        db.refresh(notice)
+    if not drive_id:
+        raise HTTPException(status_code=500, detail="사진 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.")
+    notice.drive_file_id = drive_id
+    db.commit()
+    db.refresh(notice)
     return notice
 
 

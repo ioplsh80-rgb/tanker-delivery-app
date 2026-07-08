@@ -1599,10 +1599,14 @@ async function uploadNoticePhoto(input, noticeId, companyId) {
   formData.append('file', file);
   try {
     const token = localStorage.getItem('token');
+    showToast('📤 사진 업로드 중...');
     const res = await fetch(`/api/companies/${companyId}/notices/${noticeId}/photo`, {
       method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
     });
-    if(!res.ok) throw new Error('업로드 실패');
+    if(!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '업로드 실패');
+    }
     showToast('✅ 사진이 업로드되었습니다.');
     await loadCompanies();
     await loadNotices(companyId);
