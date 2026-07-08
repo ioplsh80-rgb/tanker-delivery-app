@@ -60,29 +60,26 @@ def export_excel(
         top=Side(style="thin"), bottom=Side(style="thin"),
     )
 
-    # 제목
-    ws.merge_cells("A1:M1")
+    # 제목 (16열 전체 병합)
+    ws.merge_cells("A1:P1")
     ws["A1"] = "탱크로리 배송 내역"
     ws["A1"].font = Font(bold=True, size=15, color="1E3A5F")
     ws["A1"].alignment = center
     ws.row_dimensions[1].height = 34
 
-    ws.merge_cells("A2:M2")
+    ws.merge_cells("A2:P2")
     ws["A2"] = f"출력일: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M')}"
     ws["A2"].font = Font(size=10, color="6B7280")
     ws["A2"].alignment = Alignment(horizontal="right", vertical="center")
     ws.row_dimensions[2].height = 18
 
-    # 헤더 (13열)
+    # 헤더 (16열)
     headers = [
         "번호", "유형", "업체명", "목적지", "품목", "수량(Kg)",
         "기사명", "차량번호", "배송날짜", "배송시간",
         "상차완료", "운행시작", "하차완료", "완료시간", "상태", "특이사항",
     ]
     col_widths = [6, 8, 16, 22, 20, 10, 10, 13, 13, 10, 10, 10, 10, 10, 10, 26]
-
-    ws.merge_cells("A1:P1")
-    ws.merge_cells("A2:P2")
 
     header_fill = PatternFill("solid", fgColor="1E3A5F")
     header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -99,7 +96,8 @@ def export_excel(
     status_fills = {
         "wait":     PatternFill("solid", fgColor="FEF3C7"),
         "loaded":   PatternFill("solid", fgColor="EDE9FE"),
-        "departed": PatternFill("solid", fgColor="DBEAFE"),
+        "driving":  PatternFill("solid", fgColor="DBEAFE"),
+        "unloaded": PatternFill("solid", fgColor="CCFBF1"),
         "done":     PatternFill("solid", fgColor="DCFCE7"),
         "cancel":   PatternFill("solid", fgColor="FEE2E2"),
     }
@@ -126,9 +124,10 @@ def export_excel(
         status_fill = status_fills.get(d.status)
         for col_idx, val in enumerate(row_values, 1):
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
-            cell.alignment = left_wrap if col_idx == 15 else center
+            # 16열(특이사항)만 왼쪽 정렬, 15열(상태)에 상태 색상
+            cell.alignment = left_wrap if col_idx == 16 else center
             cell.border = thin_border
-            if col_idx == 14 and status_fill:
+            if col_idx == 15 and status_fill:
                 cell.fill = status_fill
         ws.row_dimensions[row_idx].height = 18
 
