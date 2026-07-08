@@ -261,6 +261,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     </div>
     <div class="header-right">
       <span class="header-user" id="headerUser"></span>
+      <button class="logout-btn" onclick="openMyPasswordModal()">🔑 비밀번호</button>
       <button class="logout-btn" onclick="doLogout()">로그아웃</button>
     </div>
   </header>
@@ -847,6 +848,34 @@ header h2 { font-size: 16px; font-weight: 700; }
   </div>
 </div>
 
+<!-- ══ 내 비밀번호 변경 모달 ══ -->
+<div id="myPasswordModal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">🔑 내 비밀번호 변경</h3>
+      <button class="modal-close" onclick="closeModal('myPasswordModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>현재 비밀번호 *</label>
+        <input type="password" id="myp-current" class="form-input" placeholder="현재 비밀번호 입력">
+      </div>
+      <div class="form-group">
+        <label>새 비밀번호 *</label>
+        <input type="password" id="myp-new" class="form-input" placeholder="새 비밀번호 입력">
+      </div>
+      <div class="form-group">
+        <label>새 비밀번호 확인 *</label>
+        <input type="password" id="myp-confirm" class="form-input" placeholder="새 비밀번호 재입력">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('myPasswordModal')">취소</button>
+      <button class="btn btn-primary" onclick="submitMyPassword()">변경</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ 품목 추가 모달 ══ -->
 <div id="addItemModal" class="modal-overlay hidden">
   <div class="modal">
@@ -1296,6 +1325,25 @@ async function submitChangePassword() {
     await api('PATCH', `/users/${id}/password`, { password: pw });
     closeModal('changePasswordModal');
     showToast('비밀번호가 변경되었습니다.');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+function openMyPasswordModal() {
+  ['myp-current','myp-new','myp-confirm'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('myPasswordModal').classList.remove('hidden');
+}
+
+async function submitMyPassword() {
+  const cur = document.getElementById('myp-current').value;
+  const nw  = document.getElementById('myp-new').value;
+  const cf  = document.getElementById('myp-confirm').value;
+  if (!cur) { showToast('⚠️ 현재 비밀번호를 입력해주세요.'); return; }
+  if (!nw)  { showToast('⚠️ 새 비밀번호를 입력해주세요.'); return; }
+  if (nw !== cf) { showToast('⚠️ 새 비밀번호가 일치하지 않습니다.'); return; }
+  try {
+    await api('PATCH', `/users/${currentUser.id}/password`, { password: nw, current_password: cur });
+    closeModal('myPasswordModal');
+    showToast('✅ 비밀번호가 변경되었습니다.');
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 

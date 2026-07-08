@@ -5,7 +5,7 @@ from typing import List
 import models
 import schemas
 from database import get_db
-from routers.auth import get_current_user, get_password_hash
+from routers.auth import get_current_user, get_password_hash, verify_password
 
 router = APIRouter()
 
@@ -116,9 +116,12 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    # 본인, 관리자, 슈퍼관리자 변경 가능
-    if current_user.id != user_id and current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    # 본인: 현재 비밀번호 확인 후 변경 가능 / 타인: 슈퍼관리자만 가능
+    if current_user.id == user_id:
+        if not body.current_password or not verify_password(body.current_password, current_user.password_hash):
+            raise HTTPException(status_code=400, detail="현재 비밀번호가 일치하지 않습니다.")
+    elif current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="다른 사용자의 비밀번호는 슈퍼관리자만 변경할 수 있습니다.")
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")

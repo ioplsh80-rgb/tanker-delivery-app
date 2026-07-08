@@ -113,6 +113,7 @@ class UserPermissionUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     password: str
+    current_password: Optional[str] = None  # 본인 변경 시 필수
 
 
 # ── Auth ──────────────────────────────────────────
