@@ -135,6 +135,12 @@ class DeliveryCreate(BaseModel):
     # 배차 정보 (배차 권한자가 별도 설정, 생성 시 없어도 됨)
     driver_id: Optional[int] = None
     vehicle_number: Optional[str] = None
+    # 열람 허용 관리자 ID 목록 (생성자와 슈퍼관리자는 항상 열람 가능)
+    viewer_ids: List[int] = []
+
+
+class DeliveryViewersUpdate(BaseModel):
+    viewer_ids: List[int]
 
 
 class DeliveryEdit(BaseModel):
@@ -207,6 +213,8 @@ class DeliveryResponse(BaseModel):
     complete_time: Optional[str]
     complete_memo: Optional[str]
     created_at: datetime
+    created_by: Optional[int] = None
+    viewer_ids: List[int] = []
     driver_user: Optional[UserResponse] = None
     photos: List[PhotoResponse] = []
 

@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
@@ -86,6 +87,40 @@ def get_flow(delivery_type: str):
     return OUTBOUND_FLOW if delivery_type == "출하" else INBOUND_FLOW
 
 
+def _apply_visibility_filter(query, db: Session, current_user: models.User):
+    """역할별 배송카드 열람 범위 필터.
+    superadmin: 전체 / driver: 본인 배차 건 / admin: 본인 생성 + 열람 지정된 건"""
+    if current_user.role == "driver":
+        return query.filter(models.Delivery.driver_id == current_user.id)
+    if current_user.role == "admin":
+        visible_ids = db.query(models.DeliveryViewer.delivery_id).filter(
+            models.DeliveryViewer.user_id == current_user.id
+        )
+        return query.filter(or_(
+            models.Delivery.created_by == current_user.id,
+            models.Delivery.id.in_(visible_ids),
+        ))
+    return query  # superadmin
+
+
+def _can_view_delivery(d: models.Delivery, db: Session, current_user: models.User) -> bool:
+    if current_user.role == "superadmin":
+        return True
+    if current_user.role == "driver":
+        return d.driver_id == current_user.id
+    if d.created_by == current_user.id:
+        return True
+    return db.query(models.DeliveryViewer).filter(
+        models.DeliveryViewer.delivery_id == d.id,
+        models.DeliveryViewer.user_id == current_user.id,
+    ).first() is not None
+
+
+def _require_view(d: models.Delivery, db: Session, current_user: models.User):
+    if not _can_view_delivery(d, db, current_user):
+        raise HTTPException(status_code=403, detail="이 배송카드에 접근할 권한이 없습니다.")
+
+
 @router.get("/", response_model=List[schemas.DeliveryResponse])
 def get_deliveries(
     status: Optional[str] = None,
@@ -96,13 +131,10 @@ def get_deliveries(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    query = db.query(models.Delivery)
+    query = _apply_visibility_filter(db.query(models.Delivery), db, current_user)
 
-    if current_user.role == "driver":
-        query = query.filter(models.Delivery.driver_id == current_user.id)
-    else:
-        if driver_id:
-            query = query.filter(models.Delivery.driver_id == driver_id)
+    if current_user.role != "driver" and driver_id:
+        query = query.filter(models.Delivery.driver_id == driver_id)
 
     if status:
         query = query.filter(models.Delivery.status == status)
@@ -128,11 +160,36 @@ def create_delivery(
     if current_user.role != "superadmin" and not current_user.can_create_delivery:
         raise HTTPException(status_code=403, detail="배송 카드 생성 권한이 없습니다.")
 
-    db_delivery = models.Delivery(**delivery.dict(), created_by=current_user.id)
+    db_delivery = models.Delivery(**delivery.dict(exclude={"viewer_ids"}), created_by=current_user.id)
     db.add(db_delivery)
+    db.flush()
+    for uid in set(delivery.viewer_ids or []):
+        if uid != current_user.id:
+            db.add(models.DeliveryViewer(delivery_id=db_delivery.id, user_id=uid))
     db.commit()
     db.refresh(db_delivery)
     return db_delivery
+
+
+@router.patch("/{delivery_id}/viewers")
+def update_viewers(
+    delivery_id: int,
+    body: schemas.DeliveryViewersUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """열람 허용 관리자 변경 — 카드 생성자 또는 슈퍼관리자만 가능"""
+    d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    if current_user.role != "superadmin" and d.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="카드 생성자 또는 슈퍼관리자만 공개 대상을 변경할 수 있습니다.")
+    db.query(models.DeliveryViewer).filter(models.DeliveryViewer.delivery_id == delivery_id).delete()
+    for uid in set(body.viewer_ids or []):
+        if uid != d.created_by:
+            db.add(models.DeliveryViewer(delivery_id=delivery_id, user_id=uid))
+    db.commit()
+    return {"success": True}
 
 
 # ── 배송카드 대화 ──────────────────────────────────────
@@ -143,8 +200,7 @@ def _get_delivery_for_chat(delivery_id: int, db: Session, current_user: models.U
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
-    if current_user.role not in ADMIN_ROLES and d.driver_id != current_user.id:
-        raise HTTPException(status_code=403, detail="이 배송의 대화에 접근할 권한이 없습니다.")
+    _require_view(d, db, current_user)
     return d
 
 
@@ -181,9 +237,7 @@ def get_unread_counts(
     current_user: models.User = Depends(get_current_user),
 ):
     """배송카드별 안 읽은 메시지 개수 { delivery_id: count }"""
-    q = db.query(models.Delivery.id)
-    if current_user.role == "driver":
-        q = q.filter(models.Delivery.driver_id == current_user.id)
+    q = _apply_visibility_filter(db.query(models.Delivery.id), db, current_user)
     ids = [r[0] for r in q.all()]
     if not ids:
         return {}
@@ -278,6 +332,7 @@ def get_delivery(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
     return d
 
 
@@ -291,6 +346,7 @@ def update_status(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
 
     # 기사는 7일 이내 배송만 수정 가능
     if current_user.role == "driver":
@@ -330,6 +386,7 @@ def assign_vehicle(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
     d.driver_id = assign.driver_id
     if assign.vehicle_number:
         d.vehicle_number = assign.vehicle_number
@@ -355,6 +412,7 @@ def revert_status(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
 
     flow = get_flow(d.delivery_type)
 
@@ -405,8 +463,7 @@ async def upload_photos(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
-    if d.driver_id != current_user.id and current_user.role not in ADMIN_ROLES:
-        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    _require_view(d, db, current_user)
 
     for file in files:
         contents = await file.read()
@@ -450,6 +507,7 @@ def edit_delivery(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
     if body.company is not None:
         d.company = body.company
     if body.destination is not None:
@@ -482,7 +540,9 @@ def delete_delivery(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
     db.query(models.DeliveryMessage).filter(models.DeliveryMessage.delivery_id == delivery_id).delete()
+    db.query(models.DeliveryViewer).filter(models.DeliveryViewer.delivery_id == delivery_id).delete()
     db.query(models.DeliveryMessageRead).filter(models.DeliveryMessageRead.delivery_id == delivery_id).delete()
     db.delete(d)
     db.commit()

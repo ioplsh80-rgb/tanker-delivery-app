@@ -103,6 +103,20 @@ class Delivery(Base):
     driver_user = relationship("User", foreign_keys=[driver_id], back_populates="deliveries")
     creator = relationship("User", foreign_keys=[created_by])
     photos = relationship("DeliveryPhoto", back_populates="delivery", cascade="all, delete-orphan")
+    viewers = relationship("DeliveryViewer", cascade="all, delete-orphan")
+
+    @property
+    def viewer_ids(self):
+        return [v.user_id for v in self.viewers]
+
+
+class DeliveryViewer(Base):
+    """배송카드 열람 허용 관리자 (지정된 관리자만 카드 열람 가능)"""
+    __tablename__ = "delivery_viewers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
 
 class Vehicle(Base):

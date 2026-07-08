@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from routers.auth import get_current_user
+from routers.deliveries import _apply_visibility_filter, _can_view_delivery
 
 router = APIRouter()
 
@@ -42,7 +43,7 @@ def export_excel(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    query = db.query(models.Delivery)
+    query = _apply_visibility_filter(db.query(models.Delivery), db, current_user)
     if status:
         query = query.filter(models.Delivery.status == status)
     if driver_id:
@@ -164,6 +165,9 @@ def export_pdf(
     if not d:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"error": "배송을 찾을 수 없습니다."})
+    if not _can_view_delivery(d, db, current_user):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=403, content={"error": "이 배송카드에 접근할 권한이 없습니다."})
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(

@@ -463,6 +463,10 @@ header h2 { font-size: 16px; font-weight: 700; }
         <label>특이사항</label>
         <textarea id="f-note" rows="3" placeholder="위험물 취급 주의사항, 현장 특이사항 등"></textarea>
       </div>
+      <div class="form-group" id="f-viewers-group" style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:12px;">
+        <label>👁 공개할 관리자 <span style="color:#6b7280;font-size:12px;font-weight:400;">(본인과 슈퍼관리자는 항상 볼 수 있습니다)</span></label>
+        <div id="f-viewers" style="display:flex;flex-direction:column;gap:6px;font-size:13px;"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('assignModal')">취소</button>
@@ -2084,6 +2088,13 @@ function renderDetail(d) {
       ${d.complete_memo ? `<p style="font-size:13px;color:#374151;margin-top:10px;">📝 ${d.complete_memo}</p>` : ''}
     </div>
 
+    ${(currentUser.role === 'superadmin' || (currentUser.role === 'admin' && d.created_by === currentUser.id)) ? `
+    <div class="detail-section">
+      <h4>👁 공개 대상 관리자 <span style="color:#6b7280;font-size:12px;font-weight:400;">(생성자·슈퍼관리자는 항상 열람)</span></h4>
+      <div id="detail-viewers" style="display:flex;flex-direction:column;gap:6px;font-size:13px;margin-bottom:8px;"></div>
+      <button class="btn btn-sm btn-outline" onclick="saveDetailViewers(${d.id})">💾 공개 설정 저장</button>
+    </div>` : ''}
+
     <div class="detail-section">
       <h4>💬 대화</h4>
       <div class="chat-box">
@@ -2098,6 +2109,8 @@ function renderDetail(d) {
   `;
 
   startChat(d.id);
+  if (document.getElementById('detail-viewers'))
+    renderViewerChecklist('detail-viewers', d.viewer_ids || []);
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
   if (d.status === 'done')
@@ -2176,7 +2189,48 @@ function openAssignModal() {
   document.getElementById('f-qty').value = '';
   document.getElementById('f-date').value = today;
   document.getElementById('f-time').value = '';
+  renderViewerChecklist('f-viewers', []);
   document.getElementById('assignModal').classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════════════════
+// 배송카드 공개 대상 관리자
+// ═══════════════════════════════════════════════════
+let adminsList = null;   // null = 아직 로딩 안 됨
+
+async function loadAdminsList() {
+  if (adminsList !== null) return adminsList;
+  try { adminsList = await api('GET', '/users/admins') || []; }
+  catch (e) { adminsList = []; }
+  return adminsList;
+}
+
+async function renderViewerChecklist(containerId, checkedIds) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  box.innerHTML = '<span style="color:#9ca3af;">불러오는 중...</span>';
+  const admins = await loadAdminsList();
+  const others = admins.filter(a => !currentUser || a.id !== currentUser.id);
+  if (!others.length) {
+    box.innerHTML = '<span style="color:#9ca3af;">지정할 다른 관리자가 없습니다.</span>';
+    return;
+  }
+  box.innerHTML = others.map(a => `
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+      <input type="checkbox" class="viewer-chk" value="${a.id}" ${checkedIds.includes(a.id) ? 'checked' : ''}>
+      ${escapeHtml(a.name)}${a.department ? ` <span style="color:#9ca3af;font-size:12px;">(${escapeHtml(a.department)})</span>` : ''}
+    </label>`).join('');
+}
+
+function collectViewerIds(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .viewer-chk:checked`)].map(c => parseInt(c.value));
+}
+
+async function saveDetailViewers(deliveryId) {
+  try {
+    await api('PATCH', `/deliveries/${deliveryId}/viewers`, { viewer_ids: collectViewerIds('detail-viewers') });
+    showToast('✅ 공개 설정이 저장되었습니다.');
+  } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 async function submitAssign() {
@@ -2199,6 +2253,7 @@ async function submitAssign() {
     await api('POST', '/deliveries/', {
       company, destination: dest, item_name: item, quantity: qty,
       scheduled_date: date, delivery_time: time, delivery_type: deliveryType, notes: note,
+      viewer_ids: collectViewerIds('f-viewers'),
     });
     closeModal('assignModal');
     showToast('✅ 배송이 할당되었습니다.');

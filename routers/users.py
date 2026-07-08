@@ -32,6 +32,22 @@ def get_drivers(
     )
 
 
+@router.get("/admins", response_model=List[schemas.UserResponse])
+def get_admins(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """관리자 목록 (배송카드 공개 대상 지정용) — 관리자만 조회 가능"""
+    if current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="관리자만 접근 가능합니다.")
+    return (
+        db.query(models.User)
+        .filter(models.User.role == "admin", models.User.is_active == True)
+        .order_by(models.User.name)
+        .all()
+    )
+
+
 @router.post("/", response_model=schemas.UserResponse)
 def create_user(
     user: schemas.UserCreate,
