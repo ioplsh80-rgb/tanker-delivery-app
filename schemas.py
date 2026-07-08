@@ -4,6 +4,24 @@ from datetime import datetime
 
 
 # ── Company (고객사) ──────────────────────────────────────
+class CompanyNoticeCreate(BaseModel):
+    content: str
+
+
+class CompanyNoticeUpdate(BaseModel):
+    content: str
+
+
+class CompanyNoticeResponse(BaseModel):
+    id: int
+    content: str
+    drive_file_id: Optional[str] = None
+    order_num: int
+
+    class Config:
+        from_attributes = True
+
+
 class CompanyCreate(BaseModel):
     name: str
     address: Optional[str] = None
@@ -31,6 +49,7 @@ class CompanyResponse(BaseModel):
     contact_phone: Optional[str]
     notes: Optional[str]
     is_active: bool
+    notices: List[CompanyNoticeResponse] = []
 
     class Config:
         from_attributes = True

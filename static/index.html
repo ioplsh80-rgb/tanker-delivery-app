@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -34,6 +34,16 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .badge-done     { background: #dcfce7; color: #166534; }
 .badge-cancel   { background: #fee2e2; color: #991b1b; }
 .badge-progress { background: #fed7aa; color: #9a3412; }
+
+/* 고객사 주의사항 */
+.notice-item { background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px; }
+.notice-item-row { display:flex;gap:8px;align-items:center; }
+.notice-num { font-weight:700;color:#92400e;min-width:22px;font-size:13px; }
+.notice-input { flex:1;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:13px;background:#fff; }
+.notice-photo-preview { height:56px;border-radius:4px;cursor:pointer;object-fit:cover; }
+.notice-warning-banner { background:#fffbeb;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 14px;margin-bottom:12px; }
+.notice-warning-title { font-weight:700;color:#92400e;font-size:13px;margin-bottom:8px; }
+.notice-warning-item { display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;font-size:13px;color:#78350f; }
 
 /* 기사 카드 미니 스텝바 */
 .mini-steps { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
@@ -943,6 +953,13 @@ header h2 { font-size: 16px; font-weight: 700; }
         <label>비고</label>
         <input type="text" id="ec-notes" placeholder="메모">
       </div>
+      <div class="form-group" style="border-top:1px solid #e5e7eb;margin-top:16px;padding-top:16px;">
+        <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;">⚠️ 주의사항 <span id="ec-notice-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></span>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;" onclick="addNoticeRow()">+ 추가</button>
+        </label>
+        <div id="ec-notice-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('editCompanyModal')">취소</button>
@@ -1447,7 +1464,7 @@ function openAddCompanyModal() {
   document.getElementById('addCompanyModal').classList.remove('hidden');
 }
 
-function openEditCompanyModal(id, name, address, contactName, contactPhone, contactEmail, notes) {
+async function openEditCompanyModal(id, name, address, contactName, contactPhone, contactEmail, notes) {
   document.getElementById('ec-id').value = id;
   document.getElementById('ec-name').value = name;
   document.getElementById('ec-address').value = address;
@@ -1456,6 +1473,119 @@ function openEditCompanyModal(id, name, address, contactName, contactPhone, cont
   document.getElementById('ec-contact-email').value = contactEmail;
   document.getElementById('ec-notes').value = notes;
   document.getElementById('editCompanyModal').classList.remove('hidden');
+  await loadNotices(id);
+}
+
+// ═══════════════════════════════════════════════════
+// 고객사 주의사항 관리
+// ═══════════════════════════════════════════════════
+async function loadNotices(companyId) {
+  const list = document.getElementById('ec-notice-list');
+  list.innerHTML = '<div style="color:#9ca3af;font-size:13px;">불러오는 중...</div>';
+  try {
+    const companies = await api('GET', '/companies/');
+    const company = companies.find(c => c.id == companyId);
+    const notices = company ? (company.notices || []) : [];
+    renderNoticeList(notices, companyId);
+  } catch(e) {
+    list.innerHTML = '';
+  }
+}
+
+function renderNoticeList(notices, companyId) {
+  const list = document.getElementById('ec-notice-list');
+  document.getElementById('ec-notice-count').textContent = '(' + notices.length + '/10)';
+  if (notices.length === 0) {
+    list.innerHTML = '<div style="color:#9ca3af;font-size:13px;">등록된 주의사항이 없습니다.</div>';
+    return;
+  }
+  var nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+  var html = '';
+  notices.forEach(function(n, i) {
+    var num = nums[i] || (i + 1);
+    var safeContent = (n.content || '').replace(/"/g, '&quot;');
+    var photoHTML = n.drive_file_id
+      ? '<div style="margin-left:30px;"><a href="https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w1000" target="_blank"><img class="notice-photo-preview" src="https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w200"></a></div>'
+      : '';
+    html += '<div class="notice-item" id="notice-item-' + n.id + '">'
+      + '<div class="notice-item-row">'
+      + '<span class="notice-num">' + num + '</span>'
+      + '<input class="notice-input" id="notice-text-' + n.id + '" value="' + safeContent + '" onblur="saveNoticeContent(' + n.id + ',' + companyId + ')">'
+      + '<label class="btn btn-sm btn-outline" style="cursor:pointer;padding:4px 8px;" title="사진 첨부">'
+      + '📎<input type="file" accept="image/*" style="display:none" onchange="uploadNoticePhoto(this,' + n.id + ',' + companyId + ')">'
+      + '</label>'
+      + '<button class="btn btn-sm btn-danger" onclick="deleteNotice(' + n.id + ',' + companyId + ')">🗑️</button>'
+      + '</div>'
+      + photoHTML
+      + '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function addNoticeRow() {
+  const companyId = document.getElementById('ec-id').value;
+  const list = document.getElementById('ec-notice-list');
+  const emptyMsg = list.querySelector('div[style*="color:#9ca3af"]');
+  if(emptyMsg) emptyMsg.remove();
+  const tmp = document.createElement('div');
+  tmp.className = 'notice-item';
+  tmp.id = 'notice-new-row';
+  tmp.innerHTML = `
+    <div class="notice-item-row">
+      <span class="notice-num">✏️</span>
+      <input class="notice-input" id="notice-new-text" placeholder="주의사항 내용을 입력하세요">
+      <button class="btn btn-sm btn-primary" onclick="saveNewNotice(${companyId})">저장</button>
+      <button class="btn btn-sm btn-gray" onclick="document.getElementById('notice-new-row').remove()">취소</button>
+    </div>`;
+  list.appendChild(tmp);
+  document.getElementById('notice-new-text').focus();
+}
+
+async function saveNewNotice(companyId) {
+  const content = document.getElementById('notice-new-text').value.trim();
+  if(!content) { showToast('⚠️ 내용을 입력해주세요.'); return; }
+  try {
+    await api('POST', `/companies/${companyId}/notices`, { content });
+    showToast('✅ 주의사항이 추가되었습니다.');
+    await loadCompanies();
+    await loadNotices(companyId);
+  } catch(e) { showToast('⚠️ ' + e.message); }
+}
+
+async function saveNoticeContent(noticeId, companyId) {
+  const content = document.getElementById(`notice-text-${noticeId}`)?.value.trim();
+  if(!content) return;
+  try {
+    await api('PATCH', `/companies/${companyId}/notices/${noticeId}`, { content });
+    await loadCompanies();
+  } catch(e) { showToast('⚠️ ' + e.message); }
+}
+
+async function deleteNotice(noticeId, companyId) {
+  if(!confirm('이 주의사항을 삭제하시겠습니까?')) return;
+  try {
+    await api('DELETE', `/companies/${companyId}/notices/${noticeId}`);
+    showToast('✅ 삭제되었습니다.');
+    await loadCompanies();
+    await loadNotices(companyId);
+  } catch(e) { showToast('⚠️ ' + e.message); }
+}
+
+async function uploadNoticePhoto(input, noticeId, companyId) {
+  if(!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`/api/companies/${companyId}/notices/${noticeId}/photo`, {
+      method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData
+    });
+    if(!res.ok) throw new Error('업로드 실패');
+    showToast('✅ 사진이 업로드되었습니다.');
+    await loadCompanies();
+    await loadNotices(companyId);
+  } catch(e) { showToast('⚠️ ' + e.message); }
 }
 
 async function submitEditCompany() {
@@ -1869,6 +1999,25 @@ function renderDetail(d) {
       }).join('')}</div>`
     : '<p style="font-size:13px;color:#9ca3af;">첨부된 사진 없음</p>';
 
+  // 주의사항 배너
+  const matchedCompany = companiesList.find(c => c.name === d.company);
+  const notices = matchedCompany && matchedCompany.notices && matchedCompany.notices.length > 0
+    ? matchedCompany.notices : [];
+  const noticeBannerHTML = notices.length > 0 ? `
+    <div class="notice-warning-banner">
+      <div class="notice-warning-title">⚠️ 주의사항 (${notices.length}건)</div>
+      ${notices.map((n, i) => {
+        const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+        return `<div class="notice-warning-item">
+          <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
+          <div>
+            <div>${n.content}</div>
+            ${n.drive_file_id ? `<img src="https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w400" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w1000')">` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
   document.getElementById('detailBody').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div>
@@ -1877,6 +2026,7 @@ function renderDetail(d) {
       </div>
       <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
     </div>
+    ${noticeBannerHTML}
     <div class="status-flow">${stepsHTML}</div>
 
     <div class="detail-section">

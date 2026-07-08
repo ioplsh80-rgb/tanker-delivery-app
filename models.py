@@ -40,6 +40,23 @@ class Company(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    notices = relationship("CompanyNotice", back_populates="company",
+                           order_by="CompanyNotice.order_num", cascade="all, delete-orphan")
+
+
+class CompanyNotice(Base):
+    """고객사 주의사항"""
+    __tablename__ = "company_notices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    drive_file_id = Column(String(200))
+    order_num = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    company = relationship("Company", back_populates="notices")
+
 
 class Item(Base):
     """품목 관리"""
