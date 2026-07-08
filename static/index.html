@@ -1876,8 +1876,6 @@ function buildCardActions(d, mode) {
       if (d.status === 'loaded')
         btns = `${revert}<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
     }
-    if (d.status === 'done')
-      btns = `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">⬇️ 사진 다운로드</button>`;
     if (currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
       btns += `<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="event.stopPropagation();openEditDeliveryModal(${d.id})">✏️ 수정</button>`;
     return btns;
@@ -1886,8 +1884,6 @@ function buildCardActions(d, mode) {
     if (mode === 'driverHistory') {
       const canEdit = isWithinWeek(d.scheduled_date);
       let btns = '';
-      if (d.status === 'done')
-        btns += `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">⬇️ 사진 다운로드</button>`;
       if (canEdit && d.status !== 'cancel') {
         if (isOut) {
           if (d.status === 'wait')    btns += `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
@@ -1922,8 +1918,6 @@ function buildCardActions(d, mode) {
       if (d.status === 'loaded')
         return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
     }
-    if (d.status === 'done')
-      return `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">⬇️ 사진 다운로드</button>`;
   }
   return '';
 }
@@ -2140,8 +2134,6 @@ function renderDetail(d) {
     renderViewerChecklist('detail-viewers', d.viewer_ids || []);
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
-  if (d.status === 'done')
-    footer += `<button class="btn btn-outline" onclick="downloadPDF(${d.id})">⬇️ 사진 다운로드</button>`;
 
   // 수정 버튼 (배송정보 권한자)
   if ((currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
@@ -2588,27 +2580,6 @@ async function downloadExcel() {
     a.click();
     URL.revokeObjectURL(url);
     showToast('✅ 엑셀 다운로드 완료');
-  } catch (e) { showToast('⚠️ 다운로드 실패'); }
-}
-
-async function downloadPDF(id, e) {
-  if (e) e.stopPropagation();
-  try {
-    const d = deliveriesCache[id] || await api('GET', `/deliveries/${id}`);
-    const photos = d.photos || [];
-    if (photos.length === 0) { showToast('⚠️ 첨부된 사진이 없습니다.'); return; }
-    photos.forEach((p, i) => {
-      const a = document.createElement('a');
-      if (p.drive_file_id) {
-        a.href = `https://drive.google.com/uc?export=download&id=${p.drive_file_id}`;
-        a.target = '_blank';
-      } else if (p.photo_data) {
-        a.href = p.photo_data;
-        a.download = p.filename || `계근표_D${String(id).padStart(3,'0')}_${i+1}.jpg`;
-      } else { return; }
-      a.click();
-    });
-    showToast(`✅ 사진 ${photos.length}장 다운로드`);
   } catch (e) { showToast('⚠️ 다운로드 실패'); }
 }
 
