@@ -1003,7 +1003,13 @@ header h2 { font-size: 16px; font-weight: 700; }
 
 <!-- 사진 전체보기 -->
 <div id="photoViewModal" class="modal-overlay hidden" onclick="closeModal('photoViewModal')">
-  <img id="photoViewImg" style="max-width:95vw;max-height:90vh;border-radius:8px;object-fit:contain;">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;" onclick="event.stopPropagation()">
+    <img id="photoViewImg" style="max-width:95vw;max-height:82vh;border-radius:8px;object-fit:contain;">
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="photoViewDownBtn" onclick="downloadViewedPhoto()">⬇️ 다운로드</button>
+      <button class="btn btn-gray" onclick="closeModal('photoViewModal')">닫기</button>
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -1538,7 +1544,7 @@ function renderNoticeList(notices, companyId) {
     var num = nums[i] || (i + 1);
     var safeContent = (n.content || '').replace(/"/g, '&quot;');
     var photoHTML = n.drive_file_id
-      ? '<div style="margin-left:30px;"><a href="https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w1000" target="_blank"><img class="notice-photo-preview" src="https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w200"></a></div>'
+      ? '<div style="margin-left:30px;"><img class="notice-photo-preview" src="https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w200" onclick="viewPhoto(\'https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w1000\', \'' + n.drive_file_id + '\')"></div>'
       : '';
     html += '<div class="notice-item" id="notice-item-' + n.id + '">'
       + '<div class="notice-item-row">'
@@ -2035,7 +2041,7 @@ function renderDetail(d) {
         const src = p.drive_file_id
           ? `https://drive.google.com/thumbnail?id=${p.drive_file_id}&sz=w800`
           : p.photo_data;
-        return `<div class="photo-thumb"><img src="${src}" onclick="viewPhoto('${src}')"></div>`;
+        return `<div class="photo-thumb"><img src="${src}" onclick="viewPhoto('${src}', ${p.drive_file_id ? `'${p.drive_file_id}'` : 'null'})"></div>`;
       }).join('')}</div>`
     : '<p style="font-size:13px;color:#9ca3af;">첨부된 사진 없음</p>';
 
@@ -2052,7 +2058,7 @@ function renderDetail(d) {
           <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
           <div>
             <div>${n.content}</div>
-            ${n.drive_file_id ? `<img src="https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w400" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w1000')">` : ''}
+            ${n.drive_file_id ? `<img src="https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w400" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w1000', '${n.drive_file_id}')">` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -2662,7 +2668,7 @@ function renderChatMsg(m) {
   const mine = currentUser && m.user_id === currentUser.id;
   const roleLabel = m.user_role === 'driver' ? '기사' : '관리자';
   const img = m.drive_file_id
-    ? `<img class="chat-img" src="https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w400" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w1000')">`
+    ? `<img class="chat-img" src="https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w400" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w1000', '${m.drive_file_id}')">`
     : '';
   const text = m.content ? `<div class="chat-bubble">${escapeHtml(m.content)}</div>` : '';
   return `<div class="chat-msg ${mine ? 'mine' : 'other'}">
@@ -2728,9 +2734,29 @@ function showToast(msg) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), 2800);
 }
-function viewPhoto(src) {
+let viewedPhotoFileId = null;
+let viewedPhotoSrc = null;
+
+function viewPhoto(src, fileId) {
+  viewedPhotoSrc = src;
+  viewedPhotoFileId = fileId || null;
   document.getElementById('photoViewImg').src = src;
   document.getElementById('photoViewModal').classList.remove('hidden');
+}
+
+function downloadViewedPhoto() {
+  if (viewedPhotoFileId) {
+    // Google Drive 원본 다운로드
+    window.open(`https://drive.google.com/uc?export=download&id=${viewedPhotoFileId}`, '_blank');
+  } else if (viewedPhotoSrc && viewedPhotoSrc.startsWith('data:')) {
+    // 레거시 base64 사진
+    const a = document.createElement('a');
+    a.href = viewedPhotoSrc;
+    a.download = `사진_${Date.now()}.jpg`;
+    a.click();
+  } else if (viewedPhotoSrc) {
+    window.open(viewedPhotoSrc, '_blank');
+  }
 }
 function refreshCurrentTab() {
   if (currentTab === 'dashboard')    loadDashboard();
