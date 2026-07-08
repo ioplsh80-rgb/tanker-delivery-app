@@ -1101,8 +1101,8 @@ async function initApp() {
         if (btn) btn.style.display = 'none';
       });
     }
-    // 배송 카드 생성 버튼: can_create_delivery 또는 superadmin만 표시
-    const canCreate = currentUser.role === 'superadmin' || currentUser.can_create_delivery;
+    // 배송 카드 생성 버튼: superadmin, admin, can_create_delivery 권한자 표시
+    const canCreate = currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery;
     ['btnOpenAssign','btnOpenAssign2'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = canCreate ? '' : 'none';
@@ -1702,7 +1702,7 @@ function buildCardActions(d, mode) {
     }
     if (d.status === 'done')
       btns = `<button class="btn btn-outline btn-sm" onclick="downloadPDF(${d.id},event)">⬇️ 사진 다운로드</button>`;
-    if (currentUser && (currentUser.role === 'superadmin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
+    if (currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
       btns += `<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="event.stopPropagation();openEditDeliveryModal(${d.id})">✏️ 수정</button>`;
     return btns;
   } else {
@@ -1920,7 +1920,7 @@ function renderDetail(d) {
     footer += `<button class="btn btn-outline" onclick="downloadPDF(${d.id})">⬇️ 사진 다운로드</button>`;
 
   // 수정 버튼 (배송정보 권한자)
-  if ((currentUser.role === 'superadmin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
+  if ((currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
     footer += `<button class="btn btn-outline" onclick="closeModal('detailModal');openEditDeliveryModal(${d.id})">✏️ 수정</button>`;
 
   // 배차 버튼 (배차 권한자)
