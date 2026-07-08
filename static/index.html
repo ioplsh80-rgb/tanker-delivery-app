@@ -1196,7 +1196,7 @@ async function loadItems() {
     itemsList = await api('GET', '/items/');
     const sel = document.getElementById('f-item');
     sel.innerHTML = '<option value="">선택하세요</option>' +
-      itemsList.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+      itemsList.map(i => `<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -1205,7 +1205,7 @@ async function loadCompanies() {
     companiesList = await api('GET', '/companies');
     const sel = document.getElementById('f-company');
     sel.innerHTML = '<option value="">선택하세요</option>' +
-      companiesList.map(c => `<option value="${c.name}" data-address="${c.address||''}">${c.name}</option>`).join('');
+      companiesList.map(c => `<option value="${escapeHtml(c.name)}" data-address="${escapeHtml(c.address||'')}">${escapeHtml(c.name)}</option>`).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -1227,11 +1227,11 @@ async function loadDriverMgmt() {
       return `
       <tr>
         <td>${u.id}</td>
-        <td><strong>${u.name}</strong></td>
-        <td>${u.username}</td>
-        <td>${u.department || '-'}</td>
-        <td>${u.phone || '-'}</td>
-        <td>${vehTxt}</td>
+        <td><strong>${escapeHtml(u.name)}</strong></td>
+        <td>${escapeHtml(u.username)}</td>
+        <td>${escapeHtml(u.department || '-')}</td>
+        <td>${escapeHtml(u.phone || '-')}</td>
+        <td>${escapeHtml(vehTxt)}</td>
         <td>
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;"
             onclick="openEditDriverMgmtModal(${u.id},'${escArg(u.name)}','${escArg(u.phone)}','${escArg(u.email)}','${escArg(u.department)}','${escArg(u.vehicle_number)}','${escArg(u.vehicle_type)}')">수정</button>
@@ -1368,7 +1368,7 @@ async function loadItemTab() {
     const rows = list.map(i => `
       <tr>
         <td>${i.id}</td>
-        <td><strong>${i.name}</strong></td>
+        <td><strong>${escapeHtml(i.name)}</strong></td>
         <td><button class="btn btn-danger btn-sm" onclick="deleteItem(${i.id})">삭제</button></td>
       </tr>`).join('');
     document.getElementById('itemTableWrap').innerHTML = `
@@ -1417,12 +1417,12 @@ async function loadCompanyTab() {
     const rows = list.map(c => `
       <tr>
         <td>${c.id}</td>
-        <td><strong>${c.name}</strong></td>
-        <td>${c.address || '-'}</td>
-        <td>${c.contact_name || '-'}</td>
-        <td>${c.contact_phone || '-'}</td>
-        <td>${c.contact_email || '-'}</td>
-        <td>${c.notes || '-'}</td>
+        <td><strong>${escapeHtml(c.name)}</strong></td>
+        <td>${escapeHtml(c.address || '-')}</td>
+        <td>${escapeHtml(c.contact_name || '-')}</td>
+        <td>${escapeHtml(c.contact_phone || '-')}</td>
+        <td>${escapeHtml(c.contact_email || '-')}</td>
+        <td>${escapeHtml(c.notes || '-')}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditCompanyModal(${c.id},'${escArg(c.name)}','${escArg(c.address)}','${escArg(c.contact_name)}','${escArg(c.contact_phone)}','${escArg(c.contact_email)}','${escArg(c.notes)}')">수정</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">삭제</button>
@@ -1642,7 +1642,7 @@ async function loadDashboard() {
 function loadDriverFilterOptions() {
   const sel = document.getElementById('filterDriver');
   sel.innerHTML = '<option value="">전체 기사</option>' +
-    drivers.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    drivers.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 }
 
 async function loadDeliveries() {
@@ -1677,13 +1677,13 @@ async function loadDriverStatus() {
       const waitC   = myD.filter(d => d.status === 'wait').length;
       const curVeh  = active ? active.vehicle_number : '-';
       const statusText = active
-        ? `🚛 ${STATUS_LABELS[active.status]} · ${active.company} → ${active.destination}`
+        ? `🚛 ${STATUS_LABELS[active.status]} · ${escapeHtml(active.company)} → ${escapeHtml(active.destination)}`
         : '🟢 대기 가능';
       return `<div class="driver-card">
         <div class="driver-card-header">
           <div>
-            <div class="driver-name">👷 ${dr.name}</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px;">현재 차량: ${curVeh}</div>
+            <div class="driver-name">👷 ${escapeHtml(dr.name)}</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">현재 차량: ${escapeHtml(curVeh)}</div>
           </div>
           <span class="badge ${active ? 'badge-progress' : 'badge-wait'}">${active ? STATUS_LABELS[active.status] : '대기 가능'}</span>
         </div>
@@ -1774,16 +1774,16 @@ function deliveryCardHTML(d, mode) {
   <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
     <div class="card-header">
       <div>
-        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${d.scheduled_date} ${d.delivery_time}</div>
-        <div class="card-company">${d.company}${unreadMap[d.id] ? `<span class="chat-unread-badge">💬 ${unreadMap[d.id]}</span>` : ''}</div>
+        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}</div>
+        <div class="card-company">${escapeHtml(d.company)}${unreadMap[d.id] ? `<span class="chat-unread-badge">💬 ${unreadMap[d.id]}</span>` : ''}</div>
       </div>
       ${statusArea}
     </div>
     <div class="card-meta">
-      <div><div class="meta-label">목적지</div><div class="meta-val">📍 ${d.destination}</div></div>
-      <div><div class="meta-label">품목</div><div class="meta-val">🗂️ ${d.item_name}</div></div>
+      <div><div class="meta-label">목적지</div><div class="meta-val">📍 ${escapeHtml(d.destination)}</div></div>
+      <div><div class="meta-label">품목</div><div class="meta-val">🗂️ ${escapeHtml(d.item_name)}</div></div>
       <div><div class="meta-label">수량</div><div class="meta-val">${Number(d.quantity).toLocaleString()} Kg</div></div>
-      <div><div class="meta-label">기사 / 차량</div><div class="meta-val">${d.driver_id ? `👷 ${driverName} · ${d.vehicle_number || '-'}` : '<span style="color:#ef4444;font-weight:600;">⚠️ 배차 미등록</span>'}</div></div>
+      <div><div class="meta-label">기사 / 차량</div><div class="meta-val">${d.driver_id ? `👷 ${escapeHtml(driverName)} · ${escapeHtml(d.vehicle_number || '-')}` : '<span style="color:#ef4444;font-weight:600;">⚠️ 배차 미등록</span>'}</div></div>
     </div>
     ${actions ? `<div class="card-footer" onclick="event.stopPropagation()">${actions}</div>` : ''}
   </div>`;
@@ -1990,7 +1990,7 @@ function renderDetail(d) {
         return `<div class="notice-warning-item">
           <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
           <div>
-            <div>${n.content}</div>
+            <div>${escapeHtml(n.content)}</div>
             ${n.drive_file_id ? `<img src="https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w400" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w1000', '${n.drive_file_id}')">` : ''}
           </div>
         </div>`;
@@ -2001,7 +2001,7 @@ function renderDetail(d) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div>
         <div style="font-size:12px;color:#6b7280;">D${String(d.id).padStart(3,'0')}</div>
-        <div style="font-size:20px;font-weight:800;color:#1e3a5f;">${d.company}</div>
+        <div style="font-size:20px;font-weight:800;color:#1e3a5f;">${escapeHtml(d.company)}</div>
       </div>
       <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
     </div>
@@ -2011,19 +2011,19 @@ function renderDetail(d) {
     <div class="detail-section">
       <h4>배송 정보</h4>
       <div class="detail-grid">
-        <div><div class="di-label">목적지</div><div class="di-val">📍 ${d.destination}</div></div>
-        <div><div class="di-label">배송 일시</div><div class="di-val">🕐 ${d.scheduled_date} ${d.delivery_time}</div></div>
-        <div><div class="di-label">품목</div><div class="di-val">🗂️ ${d.item_name}</div></div>
+        <div><div class="di-label">목적지</div><div class="di-val">📍 ${escapeHtml(d.destination)}</div></div>
+        <div><div class="di-label">배송 일시</div><div class="di-val">🕐 ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}</div></div>
+        <div><div class="di-label">품목</div><div class="di-val">🗂️ ${escapeHtml(d.item_name)}</div></div>
         <div><div class="di-label">수량</div><div class="di-val">${Number(d.quantity).toLocaleString()} Kg</div></div>
-        ${d.notes ? `<div class="full"><div class="di-label">특이사항</div><div class="di-val">⚠️ ${d.notes}</div></div>` : ''}
+        ${d.notes ? `<div class="full"><div class="di-label">특이사항</div><div class="di-val">⚠️ ${escapeHtml(d.notes)}</div></div>` : ''}
       </div>
     </div>
 
     <div class="detail-section">
       <h4>담당 기사 / 차량</h4>
       <div class="detail-grid">
-        <div><div class="di-label">기사명</div><div class="di-val">👷 ${d.driver_user ? d.driver_user.name : '-'}</div></div>
-        <div><div class="di-label">차량 번호</div><div class="di-val">🚛 ${d.vehicle_number || '-'}</div></div>
+        <div><div class="di-label">기사명</div><div class="di-val">👷 ${escapeHtml(d.driver_user ? d.driver_user.name : '-')}</div></div>
+        <div><div class="di-label">차량 번호</div><div class="di-val">🚛 ${escapeHtml(d.vehicle_number || '-')}</div></div>
       </div>
     </div>
 
@@ -2040,7 +2040,7 @@ function renderDetail(d) {
     <div class="detail-section">
       <h4>계근표 사진 (${d.photos ? d.photos.length : 0}장)</h4>
       ${photosHTML}
-      ${d.complete_memo ? `<p style="font-size:13px;color:#374151;margin-top:10px;">📝 ${d.complete_memo}</p>` : ''}
+      ${d.complete_memo ? `<p style="font-size:13px;color:#374151;margin-top:10px;">📝 ${escapeHtml(d.complete_memo)}</p>` : ''}
     </div>
 
     ${(currentUser.role === 'superadmin' || (currentUser.role === 'admin' && d.created_by === currentUser.id)) ? `
@@ -2242,11 +2242,11 @@ function openAssignVehicleModal(id) {
   currentAssignId = id;
   const d = deliveriesCache[id] || {};
   document.getElementById('assignVehicleInfo').innerHTML =
-    `<b>D${String(id).padStart(3,'0')}</b> · ${d.company||''} → ${d.destination||''}<br>` +
-    `${d.scheduled_date||''} ${d.delivery_time||''} · ${d.item_name||''} ${Number(d.quantity||0).toLocaleString()}Kg`;
+    `<b>D${String(id).padStart(3,'0')}</b> · ${escapeHtml(d.company||'')} → ${escapeHtml(d.destination||'')}<br>` +
+    `${escapeHtml(d.scheduled_date||'')} ${escapeHtml(d.delivery_time||'')} · ${escapeHtml(d.item_name||'')} ${Number(d.quantity||0).toLocaleString()}Kg`;
   const driverSel = document.getElementById('av-driver');
   driverSel.innerHTML = '<option value="">선택하세요</option>' +
-    drivers.map(dr => `<option value="${dr.id}">${dr.name}</option>`).join('');
+    drivers.map(dr => `<option value="${dr.id}">${escapeHtml(dr.name)}</option>`).join('');
   const updateVehicleInfo = (driverId) => {
     const infoEl = document.getElementById('av-vehicle-info');
     const textEl = document.getElementById('av-vehicle-text');
@@ -2412,12 +2412,12 @@ async function loadUsers() {
     const rows = adminUsers.map(u => `
       <tr>
         <td>${u.id}</td>
-        <td>${u.name}</td>
-        <td>${u.username}</td>
+        <td>${escapeHtml(u.name)}</td>
+        <td>${escapeHtml(u.username)}</td>
         <td><span class="badge ${roleBadge[u.role]||'badge-wait'}">${roleLabel[u.role]||u.role}</span></td>
-        <td>${u.department || '-'}</td>
-        <td>${u.phone || '-'}</td>
-        <td>${u.email || '-'}</td>
+        <td>${escapeHtml(u.department || '-')}</td>
+        <td>${escapeHtml(u.phone || '-')}</td>
+        <td>${escapeHtml(u.email || '-')}</td>
         <td style="text-align:center;">
           <input type="checkbox" ${u.can_create_delivery?'checked':''} onchange="updatePermission(${u.id},'can_create_delivery',this.checked)" ${u.role==='superadmin'?'disabled':''}>
         </td>
