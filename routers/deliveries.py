@@ -426,26 +426,19 @@ def revert_status(
     prev_status = flow[idx - 1]
     d.status = prev_status
 
-    # 이후 단계 시간 초기화
-    if prev_status == "wait":
-        d.loading_complete_time = None
-        d.driving_time = None
-        d.unloaded_time = None
-        d.complete_time = None
-        d.complete_memo = None
-    elif prev_status == "loaded":
-        d.driving_time = None
-        d.unloaded_time = None
-        d.complete_time = None
-        d.complete_memo = None
-    elif prev_status == "driving":
-        d.unloaded_time = None
-        d.loading_complete_time = None
-        d.complete_time = None
-        d.complete_memo = None
-    elif prev_status == "unloaded":
-        d.complete_time = None
-        d.complete_memo = None
+    # 되돌린 지점보다 뒤 단계의 시간 기록만 초기화 (출하/입하 흐름 각각 기준)
+    status_time_fields = {
+        "loaded": "loading_complete_time",
+        "driving": "driving_time",
+        "unloaded": "unloaded_time",
+        "done": "complete_time",
+    }
+    for later_status in flow[idx:]:
+        field = status_time_fields.get(later_status)
+        if field:
+            setattr(d, field, None)
+        if later_status == "done":
+            d.complete_memo = None
 
     d.updated_at = datetime.utcnow()
     db.commit()
