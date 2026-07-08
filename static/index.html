@@ -847,47 +847,6 @@ header h2 { font-size: 16px; font-weight: 700; }
   </div>
 </div>
 
-<!-- ══ 차량 추가 모달 ══ -->
-<div id="addVehicleModal" class="modal-overlay hidden">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>🚛 차량 추가</h3>
-      <button class="modal-close" onclick="closeModal('addVehicleModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label>차량 번호 *</label>
-        <input type="text" id="v-number" placeholder="예: 12가 3456">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>차량 종류</label>
-          <select id="v-type">
-            <option value="">선택하세요</option>
-            <option>탱크로리 10톤</option>
-            <option>탱크로리 15톤</option>
-            <option>탱크로리 20톤</option>
-            <option>탱크로리 25톤</option>
-            <option>탱크로리 30톤</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>최대 적재량 (Kg)</label>
-          <input type="number" id="v-capacity" placeholder="예: 20000">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>비고</label>
-        <input type="text" id="v-notes" placeholder="예: 산성 전용, 특이사항 등">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-gray" onclick="closeModal('addVehicleModal')">취소</button>
-      <button class="btn btn-primary" onclick="submitAddVehicle()">추가</button>
-    </div>
-  </div>
-</div>
-
 <!-- ══ 품목 추가 모달 ══ -->
 <div id="addItemModal" class="modal-overlay hidden">
   <div class="modal">
@@ -1020,7 +979,6 @@ header h2 { font-size: 16px; font-weight: 700; }
 let token = localStorage.getItem('token') || '';
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
 let drivers = [];
-let vehiclesList = [];
 let itemsList = [];
 let companiesList = [];
 let photoFiles = [];
@@ -1148,7 +1106,7 @@ async function initApp() {
     document.getElementById('headerTitle').textContent = currentUser.role === 'superadmin' ? '슈퍼관리자 대시보드' : '관리자 대시보드';
     currentTab = 'dashboard';
     await loadDrivers();
-    await Promise.all([loadVehicles(), loadItems(), loadCompanies()]);
+    await Promise.all([loadItems(), loadCompanies()]);
     // 일반 관리자는 관리 탭 숨기기
     if (currentUser.role !== 'superadmin') {
       ['vehicles','items','companies','users'].forEach(t => {
@@ -1201,18 +1159,6 @@ function switchTab(name, btn) {
 async function loadDrivers() {
   try {
     drivers = await api('GET', '/users/drivers');
-    const sel = document.getElementById('f-driver');
-    sel.innerHTML = '<option value="">선택하세요</option>' +
-      drivers.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-  } catch (e) { console.error(e); }
-}
-
-async function loadVehicles() {
-  try {
-    const sel = document.getElementById('f-vehicle');
-    const nums = [...new Set(drivers.filter(d => d.vehicle_number).map(d => d.vehicle_number))];
-    sel.innerHTML = '<option value="">선택하세요</option>' +
-      nums.map(n => `<option value="${n}">${n}</option>`).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -1273,29 +1219,6 @@ async function loadDriverMgmt() {
         <tbody>${rows}</tbody>
       </table></div>`;
   } catch (e) { showToast('⚠️ 기사 로딩 실패'); }
-}
-
-async function loadVehicleList() {
-  document.getElementById('vehicleTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
-  try {
-    const list = await api('GET', '/vehicles/');
-    if (!list || list.length === 0) { document.getElementById('vehicleTableWrap').innerHTML = emptyMsg('등록된 차량이 없습니다.'); return; }
-    const rows = list.map(v => `
-      <tr>
-        <td>${v.id}</td>
-        <td><strong>${v.vehicle_number}</strong></td>
-        <td>${v.vehicle_type || '-'}</td>
-        <td>${v.capacity ? v.capacity.toLocaleString() + ' Kg' : '-'}</td>
-        <td>${v.notes || '-'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id})">삭제</button></td>
-      </tr>`).join('');
-    document.getElementById('vehicleTableWrap').innerHTML = `
-      <div style="overflow-x:auto;">
-      <table class="data-table">
-        <thead><tr><th>ID</th><th>차량번호</th><th>종류</th><th>최대적재량</th><th>비고</th><th>관리</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>`;
-  } catch (e) { showToast('⚠️ 차량 로딩 실패'); }
 }
 
 function openAddDriverMgmtModal() {
@@ -1383,38 +1306,6 @@ async function deleteDriverMgmt(id) {
     showToast('기사가 삭제되었습니다.');
     loadDriverMgmt();
     loadDrivers();
-  } catch (e) { showToast('⚠️ ' + e.message); }
-}
-
-function openAddVehicleModal() {
-  ['v-number','v-notes'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('v-type').value = '';
-  document.getElementById('v-capacity').value = '';
-  document.getElementById('addVehicleModal').classList.remove('hidden');
-}
-
-async function submitAddVehicle() {
-  const number   = document.getElementById('v-number').value.trim();
-  const type     = document.getElementById('v-type').value;
-  const capacity = document.getElementById('v-capacity').value;
-  const notes    = document.getElementById('v-notes').value.trim();
-  if (!number) { showToast('⚠️ 차량 번호를 입력해주세요.'); return; }
-  try {
-    await api('POST', '/vehicles/', { vehicle_number: number, vehicle_type: type || null, capacity: capacity ? parseInt(capacity) : null, notes: notes || null });
-    closeModal('addVehicleModal');
-    showToast('✅ 차량이 추가되었습니다.');
-    await loadVehicles();
-    loadVehicleList();
-  } catch (e) { showToast('⚠️ ' + e.message); }
-}
-
-async function deleteVehicle(id) {
-  if (!confirm('이 차량을 삭제하시겠습니까?')) return;
-  try {
-    await api('DELETE', `/vehicles/${id}`);
-    showToast('✅ 차량이 삭제되었습니다.');
-    await loadVehicles();
-    loadVehicleList();
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
