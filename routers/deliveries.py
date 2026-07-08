@@ -14,8 +14,9 @@ from database import get_db
 from routers.auth import get_current_user
 
 
-def _upload_to_drive(contents: bytes, filename: str, mime_type: str) -> Optional[str]:
-    """Google Drive에 파일 업로드, 파일 ID 반환. 실패 시 None."""
+def _upload_to_drive(contents: bytes, filename: str, mime_type: str, subfolder: Optional[str] = None) -> Optional[str]:
+    """Google Drive에 파일 업로드, 파일 ID 반환. 실패 시 None.
+    subfolder 지정 시 기본 폴더 아래 해당 이름의 하위폴더에 저장 (없으면 생성)."""
     try:
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
@@ -37,6 +38,21 @@ def _upload_to_drive(contents: bytes, filename: str, mime_type: str) -> Optional
             token_uri="https://oauth2.googleapis.com/token",
         )
         service = build("drive", "v3", credentials=creds)
+
+        if subfolder:
+            q = (f"name = '{subfolder}' and mimeType = 'application/vnd.google-apps.folder' "
+                 f"and '{folder_id}' in parents and trashed = false")
+            res = service.files().list(q=q, fields="files(id)").execute()
+            found = res.get("files", [])
+            if found:
+                folder_id = found[0]["id"]
+            else:
+                new_folder = service.files().create(
+                    body={"name": subfolder, "mimeType": "application/vnd.google-apps.folder",
+                          "parents": [folder_id]},
+                    fields="id",
+                ).execute()
+                folder_id = new_folder["id"]
 
         file_metadata = {"name": filename, "parents": [folder_id]}
         media = MediaIoBaseUpload(io.BytesIO(contents), mimetype=mime_type)
@@ -117,6 +133,140 @@ def create_delivery(
     db.commit()
     db.refresh(db_delivery)
     return db_delivery
+
+
+# ── 배송카드 대화 ──────────────────────────────────────
+CHAT_PHOTO_SUBFOLDER = "배송대화_사진"
+
+
+def _get_delivery_for_chat(delivery_id: int, db: Session, current_user: models.User) -> models.Delivery:
+    d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    if current_user.role not in ADMIN_ROLES and d.driver_id != current_user.id:
+        raise HTTPException(status_code=403, detail="이 배송의 대화에 접근할 권한이 없습니다.")
+    return d
+
+
+def _message_response(m: models.DeliveryMessage) -> schemas.MessageResponse:
+    return schemas.MessageResponse(
+        id=m.id,
+        delivery_id=m.delivery_id,
+        user_id=m.user_id,
+        user_name=m.user.name if m.user else "-",
+        user_role=m.user.role if m.user else "",
+        content=m.content or "",
+        drive_file_id=m.drive_file_id,
+        created_at=m.created_at,
+    )
+
+
+def _mark_read(delivery_id: int, db: Session, current_user: models.User):
+    read = db.query(models.DeliveryMessageRead).filter(
+        models.DeliveryMessageRead.delivery_id == delivery_id,
+        models.DeliveryMessageRead.user_id == current_user.id,
+    ).first()
+    now = datetime.utcnow()
+    if read:
+        read.last_read_at = now
+    else:
+        db.add(models.DeliveryMessageRead(
+            delivery_id=delivery_id, user_id=current_user.id, last_read_at=now,
+        ))
+
+
+@router.get("/unread-counts")
+def get_unread_counts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """배송카드별 안 읽은 메시지 개수 { delivery_id: count }"""
+    q = db.query(models.Delivery.id)
+    if current_user.role == "driver":
+        q = q.filter(models.Delivery.driver_id == current_user.id)
+    ids = [r[0] for r in q.all()]
+    if not ids:
+        return {}
+    reads = {
+        r.delivery_id: r.last_read_at
+        for r in db.query(models.DeliveryMessageRead).filter(
+            models.DeliveryMessageRead.user_id == current_user.id,
+            models.DeliveryMessageRead.delivery_id.in_(ids),
+        ).all()
+    }
+    msgs = db.query(models.DeliveryMessage).filter(
+        models.DeliveryMessage.delivery_id.in_(ids),
+        models.DeliveryMessage.user_id != current_user.id,
+    ).all()
+    counts = {}
+    for m in msgs:
+        last_read = reads.get(m.delivery_id)
+        if last_read is None or m.created_at > last_read:
+            counts[m.delivery_id] = counts.get(m.delivery_id, 0) + 1
+    return counts
+
+
+@router.get("/{delivery_id}/messages", response_model=List[schemas.MessageResponse])
+def get_messages(
+    delivery_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _get_delivery_for_chat(delivery_id, db, current_user)
+    msgs = (
+        db.query(models.DeliveryMessage)
+        .filter(models.DeliveryMessage.delivery_id == delivery_id)
+        .order_by(models.DeliveryMessage.created_at)
+        .all()
+    )
+    _mark_read(delivery_id, db, current_user)
+    db.commit()
+    return [_message_response(m) for m in msgs]
+
+
+@router.post("/{delivery_id}/messages", response_model=schemas.MessageResponse)
+def send_message(
+    delivery_id: int,
+    body: schemas.MessageCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _get_delivery_for_chat(delivery_id, db, current_user)
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="메시지 내용을 입력해주세요.")
+    m = models.DeliveryMessage(delivery_id=delivery_id, user_id=current_user.id, content=content)
+    db.add(m)
+    _mark_read(delivery_id, db, current_user)
+    db.commit()
+    db.refresh(m)
+    return _message_response(m)
+
+
+@router.post("/{delivery_id}/messages/photo", response_model=schemas.MessageResponse)
+async def send_photo_message(
+    delivery_id: int,
+    file: UploadFile = File(...),
+    content: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    _get_delivery_for_chat(delivery_id, db, current_user)
+    contents = await file.read()
+    mime = file.content_type or "image/jpeg"
+    fname = f"chat_D{delivery_id}_{file.filename or 'photo.jpg'}"
+    drive_id = _upload_to_drive(contents, fname, mime, subfolder=CHAT_PHOTO_SUBFOLDER)
+    if not drive_id:
+        raise HTTPException(status_code=500, detail="사진 업로드에 실패했습니다.")
+    m = models.DeliveryMessage(
+        delivery_id=delivery_id, user_id=current_user.id,
+        content=(content or "").strip(), drive_file_id=drive_id,
+    )
+    db.add(m)
+    _mark_read(delivery_id, db, current_user)
+    db.commit()
+    db.refresh(m)
+    return _message_response(m)
 
 
 @router.get("/{delivery_id}", response_model=schemas.DeliveryResponse)
@@ -332,6 +482,8 @@ def delete_delivery(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    db.query(models.DeliveryMessage).filter(models.DeliveryMessage.delivery_id == delivery_id).delete()
+    db.query(models.DeliveryMessageRead).filter(models.DeliveryMessageRead.delivery_id == delivery_id).delete()
     db.delete(d)
     db.commit()
     return {"success": True}

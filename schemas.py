@@ -173,6 +173,21 @@ class PhotoResponse(BaseModel):
         from_attributes = True
 
 
+class MessageCreate(BaseModel):
+    content: str = ""
+
+
+class MessageResponse(BaseModel):
+    id: int
+    delivery_id: int
+    user_id: int
+    user_name: str
+    user_role: str
+    content: str
+    drive_file_id: Optional[str] = None
+    created_at: datetime
+
+
 class DeliveryResponse(BaseModel):
     id: int
     company: str

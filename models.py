@@ -117,6 +117,30 @@ class Vehicle(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class DeliveryMessage(Base):
+    """배송카드 대화 메시지"""
+    __tablename__ = "delivery_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content = Column(Text, default="")                    # 텍스트 (사진만 보낼 경우 빈 문자열)
+    drive_file_id = Column(String(200))                   # 첨부 사진 Google Drive 파일 ID
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+
+
+class DeliveryMessageRead(Base):
+    """배송카드 대화 읽음 기록 (사용자별 마지막 읽은 시각)"""
+    __tablename__ = "delivery_message_reads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    last_read_at = Column(DateTime, default=datetime.utcnow)
+
+
 class DeliveryPhoto(Base):
     __tablename__ = "delivery_photos"
 

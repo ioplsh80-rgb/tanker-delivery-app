@@ -44,6 +44,23 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .notice-warning-banner { background:#fffbeb;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 14px;margin-bottom:12px; }
 .notice-warning-title { font-weight:700;color:#92400e;font-size:13px;margin-bottom:8px; }
 .notice-warning-item { display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;font-size:13px;color:#78350f; }
+.chat-box { border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;display:flex;flex-direction:column; }
+.chat-messages { max-height:280px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px; }
+.chat-msg { display:flex;flex-direction:column;max-width:78%; }
+.chat-msg.mine { align-self:flex-end;align-items:flex-end; }
+.chat-msg.other { align-self:flex-start;align-items:flex-start; }
+.chat-sender { font-size:11px;color:#6b7280;margin-bottom:2px; }
+.chat-bubble { padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word;white-space:pre-wrap; }
+.chat-msg.mine .chat-bubble { background:#2563eb;color:#fff;border-bottom-right-radius:4px; }
+.chat-msg.other .chat-bubble { background:#fff;color:#111827;border:1px solid #e5e7eb;border-bottom-left-radius:4px; }
+.chat-time { font-size:10px;color:#9ca3af;margin-top:2px; }
+.chat-img { max-width:180px;border-radius:8px;cursor:pointer;display:block;margin-top:4px; }
+.chat-input-row { display:flex;gap:6px;padding:8px;border-top:1px solid #e5e7eb;background:#fff;border-radius:0 0 8px 8px; }
+.chat-input-row input[type="text"] { flex:1;border:1px solid #d1d5db;border-radius:20px;padding:8px 14px;font-size:13px;outline:none; }
+.chat-input-row input[type="text"]:focus { border-color:#2563eb; }
+.chat-attach-btn { display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:#f3f4f6;cursor:pointer;font-size:16px;border:1px solid #d1d5db; }
+.chat-send-btn { width:36px;height:36px;border-radius:50%;background:#2563eb;color:#fff;border:none;cursor:pointer;font-size:15px; }
+.chat-unread-badge { display:inline-flex;align-items:center;gap:3px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:6px; }
 
 /* 기사 카드 미니 스텝바 */
 .mini-steps { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
@@ -1678,6 +1695,7 @@ async function loadDeliveries() {
   document.getElementById('deliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const list = await api('GET', '/deliveries/?' + qs.toString());
+    await loadUnreadCounts();
     document.getElementById('deliveryList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('배송 내역이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
@@ -1725,6 +1743,7 @@ async function loadMyDeliveries() {
   document.getElementById('myDeliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const list = await api('GET', '/deliveries/');
+    await loadUnreadCounts();
     const active = list.filter(d => d.status !== 'done' && d.status !== 'cancel');
     document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('미완료 배송이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
@@ -1766,6 +1785,7 @@ async function loadMyHistory() {
       dateTo   = `${year}-12-31`;
     }
     const all = await api('GET', `/deliveries/?date_from=${dateFrom}&date_to=${dateTo}`);
+    await loadUnreadCounts();
     const list = all.filter(d => d.status === 'done');
     document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driverHistory') || emptyMsg('배송 기록이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
@@ -1792,7 +1812,7 @@ function deliveryCardHTML(d, mode) {
     <div class="card-header">
       <div>
         <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${d.scheduled_date} ${d.delivery_time}</div>
-        <div class="card-company">${d.company}</div>
+        <div class="card-company">${d.company}${unreadMap[d.id] ? `<span class="chat-unread-badge">💬 ${unreadMap[d.id]}</span>` : ''}</div>
       </div>
       ${statusArea}
     </div>
@@ -2063,7 +2083,21 @@ function renderDetail(d) {
       ${photosHTML}
       ${d.complete_memo ? `<p style="font-size:13px;color:#374151;margin-top:10px;">📝 ${d.complete_memo}</p>` : ''}
     </div>
+
+    <div class="detail-section">
+      <h4>💬 대화</h4>
+      <div class="chat-box">
+        <div class="chat-messages" id="chat-messages"><div style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">불러오는 중...</div></div>
+        <div class="chat-input-row">
+          <label class="chat-attach-btn" title="사진 첨부">📎<input type="file" accept="image/*" style="display:none" onchange="sendChatPhoto(this)"></label>
+          <input type="text" id="chat-input" placeholder="메시지 입력..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+          <button class="chat-send-btn" onclick="sendChatMessage()" title="전송">➤</button>
+        </div>
+      </div>
+    </div>
   `;
+
+  startChat(d.id);
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
   if (d.status === 'done')
@@ -2494,7 +2528,114 @@ async function downloadPDF(id, e) {
 function nowTime() {
   return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  if (id === 'detailModal') stopChat();
+}
+
+// ═══════════════════════════════════════════════════
+// 배송카드 대화
+// ═══════════════════════════════════════════════════
+let chatDeliveryId = null;
+let chatPollTimer = null;
+let chatLastMsgId = -1;
+let unreadMap = {};
+
+function startChat(deliveryId) {
+  stopChat();
+  chatDeliveryId = deliveryId;
+  chatLastMsgId = -1;
+  delete unreadMap[deliveryId];
+  loadChatMessages();
+  chatPollTimer = setInterval(loadChatMessages, 7000);
+}
+
+function stopChat() {
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  chatDeliveryId = null;
+}
+
+async function loadChatMessages() {
+  if (!chatDeliveryId) return;
+  if (document.getElementById('detailModal').classList.contains('hidden')) { stopChat(); return; }
+  const box = document.getElementById('chat-messages');
+  if (!box) { stopChat(); return; }
+  try {
+    const msgs = await api('GET', `/deliveries/${chatDeliveryId}/messages`);
+    const lastId = msgs.length ? msgs[msgs.length - 1].id : 0;
+    if (lastId === chatLastMsgId) return;   // 변경 없으면 다시 그리지 않음
+    chatLastMsgId = lastId;
+    if (!msgs.length) {
+      box.innerHTML = '<div style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">아직 메시지가 없습니다. 첫 메시지를 보내보세요.</div>';
+      return;
+    }
+    box.innerHTML = msgs.map(renderChatMsg).join('');
+    box.scrollTop = box.scrollHeight;
+  } catch (e) { /* 폴링 중 일시 오류는 무시 */ }
+}
+
+function renderChatMsg(m) {
+  const mine = currentUser && m.user_id === currentUser.id;
+  const roleLabel = m.user_role === 'driver' ? '기사' : '관리자';
+  const img = m.drive_file_id
+    ? `<img class="chat-img" src="https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w400" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w1000')">`
+    : '';
+  const text = m.content ? `<div class="chat-bubble">${escapeHtml(m.content)}</div>` : '';
+  return `<div class="chat-msg ${mine ? 'mine' : 'other'}">
+    ${mine ? '' : `<div class="chat-sender">${escapeHtml(m.user_name)} (${roleLabel})</div>`}
+    ${text}${img}
+    <div class="chat-time">${formatChatTime(m.created_at)}</div>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatChatTime(iso) {
+  const dt = new Date(iso.endsWith('Z') ? iso : iso + 'Z');   // 서버는 UTC로 저장
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mi = String(dt.getMinutes()).padStart(2, '0');
+  return `${mm}/${dd} ${hh}:${mi}`;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content || !chatDeliveryId) return;
+  input.value = '';
+  try {
+    await api('POST', `/deliveries/${chatDeliveryId}/messages`, { content });
+    await loadChatMessages();
+  } catch (e) {
+    showToast('⚠️ ' + e.message);
+    input.value = content;
+  }
+}
+
+async function sendChatPhoto(fileInput) {
+  if (!fileInput.files || !fileInput.files[0] || !chatDeliveryId) return;
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  const textInput = document.getElementById('chat-input');
+  const text = textInput ? textInput.value.trim() : '';
+  if (text) fd.append('content', text);
+  fileInput.value = '';
+  showToast('📤 사진 전송 중...');
+  try {
+    await api('POST', `/deliveries/${chatDeliveryId}/messages/photo`, fd, true);
+    if (textInput) textInput.value = '';
+    await loadChatMessages();
+    showToast('✅ 사진을 보냈습니다.');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function loadUnreadCounts() {
+  try { unreadMap = await api('GET', '/deliveries/unread-counts') || {}; }
+  catch (e) { unreadMap = {}; }
+}
 function emptyMsg(msg) { return `<p style="color:#9ca3af;text-align:center;padding:40px;">${msg}</p>`; }
 function showToast(msg) {
   const t = document.getElementById('toast');
