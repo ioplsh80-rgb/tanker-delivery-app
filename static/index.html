@@ -1625,11 +1625,11 @@ async function submitEditCompany() {
   try {
     await api('PATCH', `/companies/${id}`, {
       name,
-      address: address||null,
-      contact_name: contactName||null,
-      contact_phone: contactPhone||null,
-      contact_email: contactEmail||null,
-      notes: notes||null,
+      address,
+      contact_name: contactName,
+      contact_phone: contactPhone,
+      contact_email: contactEmail,
+      notes,
     });
     closeModal('editCompanyModal');
     showToast('✅ 고객사 정보가 수정되었습니다.');
