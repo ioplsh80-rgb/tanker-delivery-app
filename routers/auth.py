@@ -1,5 +1,6 @@
+import calendar
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -38,8 +39,8 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=TOKEN_EXPIRE_MINUTES))
-    to_encode["exp"] = expire
+    to_encode["exp"] = datetime.utcnow() + (expires_delta or timedelta(minutes=TOKEN_EXPIRE_MINUTES))
+    to_encode["iat"] = int(datetime.now(timezone.utc).timestamp())   # 발급 시각
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -65,6 +66,11 @@ def get_current_user(
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not user.is_active:
         raise credentials_exc
+    # 비밀번호 변경 이전에 발급된 토큰은 무효
+    if user.token_valid_from:
+        iat = payload.get("iat")
+        if iat is None or iat < calendar.timegm(user.token_valid_from.utctimetuple()):
+            raise credentials_exc
     return user
 
 

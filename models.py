@@ -21,6 +21,7 @@ class User(Base):
     vehicle_number = Column(String(20))                   # 담당 차량번호
     vehicle_type = Column(String(50))                     # 차량 종류
     is_active = Column(Boolean, default=True)
+    token_valid_from = Column(DateTime, nullable=True)  # 이 시각 이전 발급 토큰은 무효 (비밀번호 변경 시 갱신)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     deliveries = relationship("Delivery", back_populates="driver_user", foreign_keys="[Delivery.driver_id]")

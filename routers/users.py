@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import List
 
 import models
 import schemas
 from database import get_db
-from routers.auth import get_current_user, get_password_hash, verify_password
+from routers.auth import (COOKIE_NAME, TOKEN_EXPIRE_MINUTES, create_access_token,
+                          get_current_user, get_password_hash, verify_password)
 
 router = APIRouter()
 
@@ -123,6 +126,7 @@ def update_user_info(
 def change_password(
     user_id: int,
     body: schemas.PasswordChange,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -137,7 +141,17 @@ def change_password(
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     user.password_hash = get_password_hash(body.password)
+    # 이전에 발급된 토큰 전부 무효화 (탈취된 토큰이 있어도 비밀번호 변경으로 차단)
+    user.token_valid_from = datetime.utcnow() - timedelta(seconds=1)
     db.commit()
+    # 본인 변경이면 새 토큰을 재발급해 로그인 상태 유지
+    if current_user.id == user_id:
+        token = create_access_token({"sub": user.username})
+        response.set_cookie(
+            key=COOKIE_NAME, value=token,
+            httponly=True, secure=True, samesite="lax",
+            max_age=TOKEN_EXPIRE_MINUTES * 60, path="/",
+        )
     return {"success": True}
 
 
