@@ -155,6 +155,19 @@ class DeliveryMessageRead(Base):
     last_read_at = Column(DateTime, default=datetime.utcnow)
 
 
+class DeliveryNoticeAck(Base):
+    """배송카드 유의사항 확인(동의) 기록"""
+    __tablename__ = "delivery_notice_acks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    agreed_at = Column(DateTime, default=datetime.utcnow)
+    notices_snapshot = Column(Text)   # 동의 시점의 유의사항 전문 (JSON) - 증빙용
+
+    user = relationship("User")
+
+
 class DeliveryPhoto(Base):
     __tablename__ = "delivery_photos"
 

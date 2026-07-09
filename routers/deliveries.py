@@ -347,6 +347,62 @@ async def send_photo_message(
     return _message_response(m)
 
 
+# ── 유의사항 확인(동의) 기록 ──────────────────────────
+@router.get("/{delivery_id}/notice-ack")
+def get_notice_acks(
+    delivery_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """이 배송카드의 유의사항 확인 기록 목록"""
+    d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
+    acks = db.query(models.DeliveryNoticeAck).filter(
+        models.DeliveryNoticeAck.delivery_id == delivery_id).all()
+    return [
+        {"user_id": a.user_id, "user_name": a.user.name if a.user else "-",
+         "agreed_at": a.agreed_at.isoformat()}
+        for a in acks
+    ]
+
+
+@router.post("/{delivery_id}/notice-ack")
+def create_notice_ack(
+    delivery_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """유의사항 확인(동의) 기록 - 동의 시점의 유의사항 전문을 함께 저장"""
+    d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    _require_view(d, db, current_user)
+
+    existing = db.query(models.DeliveryNoticeAck).filter(
+        models.DeliveryNoticeAck.delivery_id == delivery_id,
+        models.DeliveryNoticeAck.user_id == current_user.id,
+    ).first()
+    if existing:
+        return {"success": True, "already": True}
+
+    # 동의 시점의 유의사항 내용을 증빙으로 저장
+    company = db.query(models.Company).filter(models.Company.name == d.company).first()
+    snapshot = []
+    if company:
+        snapshot = [
+            {"content": n.content, "drive_file_id": n.drive_file_id}
+            for n in company.notices
+        ]
+    db.add(models.DeliveryNoticeAck(
+        delivery_id=delivery_id, user_id=current_user.id,
+        notices_snapshot=json.dumps(snapshot, ensure_ascii=False),
+    ))
+    db.commit()
+    return {"success": True}
+
+
 @router.get("/{delivery_id}", response_model=schemas.DeliveryResponse)
 def get_delivery(
     delivery_id: int,

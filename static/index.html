@@ -589,6 +589,17 @@ header h2 { font-size: 16px; font-weight: 700; }
   </div>
 </div>
 
+<!-- ══ 유의사항 확인(동의) 모달 - 기사 전용 ══ -->
+<div id="noticeAckModal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header" style="background:#fffbeb;border-bottom:2px solid #f59e0b;">
+      <h3 style="color:#92400e;">⚠️ 배송지 유의사항 확인</h3>
+    </div>
+    <div class="modal-body" id="noticeAckBody"></div>
+    <div class="modal-footer" id="noticeAckFooter" style="justify-content:space-between;"></div>
+  </div>
+</div>
+
 
 <!-- ══ 계근표 등록 모달 (완료 처리) ══ -->
 <div id="photoModal" class="modal-overlay hidden">
@@ -1155,6 +1166,7 @@ async function initApp() {
     document.getElementById('driverTabs').classList.remove('hidden');
     document.getElementById('headerTitle').textContent = '기사 배송 현황';
     currentTab = 'myDeliveries';
+    await loadCompanies();   // 유의사항 표시에 필요
     await loadMyDeliveries();
   }
 }
@@ -1948,10 +1960,115 @@ async function openDetail(id) {
   document.getElementById('detailModal').classList.remove('hidden');
   try {
     const d = await api('GET', `/deliveries/${id}`);
+    // 기사는 유의사항 확인(동의) 후에만 카드를 열 수 있음 (배송 건당 1회)
+    if (currentUser.role === 'driver') {
+      const company = companiesList.find(c => c.name === d.company);
+      const notices = company && company.notices ? company.notices : [];
+      if (notices.length > 0) {
+        const acks = await api('GET', `/deliveries/${id}/notice-ack`) || [];
+        if (!acks.some(a => a.user_id === currentUser.id)) {
+          closeModal('detailModal');
+          startNoticeAck(d, notices);
+          return;
+        }
+      }
+    }
     renderDetail(d);
   } catch (e) {
     document.getElementById('detailBody').innerHTML = '<p style="color:#dc2626;text-align:center;padding:20px;">불러오기 실패</p>';
   }
+}
+
+// 유의사항 확인 여부 표시 (배송카드 상세 배너 하단)
+async function loadAckStatus(d) {
+  const el = document.getElementById('ack-status-line');
+  if (!el) return;
+  try {
+    const acks = await api('GET', `/deliveries/${d.id}/notice-ack`) || [];
+    if (currentUser.role === 'driver') {
+      const mine = acks.find(a => a.user_id === currentUser.id);
+      el.innerHTML = mine ? `<span style="color:#166534;">✅ 유의사항 확인 완료 (${formatChatTime(mine.agreed_at)})</span>` : '';
+      return;
+    }
+    if (!d.driver_id) { el.innerHTML = '<span style="color:#9ca3af;">배차 후 기사가 확인하게 됩니다.</span>'; return; }
+    const driverAck = acks.find(a => a.user_id === d.driver_id);
+    el.innerHTML = driverAck
+      ? `<span style="color:#166534;">✅ 기사 유의사항 확인 완료 (${formatChatTime(driverAck.agreed_at)})</span>`
+      : '<span style="color:#dc2626;">⏳ 기사 유의사항 미확인</span>';
+  } catch (e) { /* 표시 실패는 무시 */ }
+}
+
+// ═══════════════════════════════════════════════════
+// 유의사항 확인(동의) 절차 - 기사 전용
+// ═══════════════════════════════════════════════════
+let ackDeliveryId = null;
+let ackCompanyName = '';
+let ackNotices = [];
+let ackIdx = 0;
+
+const ACK_AGREEMENT_TEXT = '담당자는 제시된 유의사항을 충분히 숙지하고 이해해야 하며, 부주의로 인해 사고가 발생하는 경우에는 그 책임은 업무 담당자에게 있습니다.';
+
+function startNoticeAck(d, notices) {
+  ackDeliveryId = d.id;
+  ackCompanyName = d.company;
+  ackNotices = notices;
+  ackIdx = 0;
+  document.getElementById('noticeAckModal').classList.remove('hidden');
+  renderAckStep();
+}
+
+function renderAckStep() {
+  const body = document.getElementById('noticeAckBody');
+  const footer = document.getElementById('noticeAckFooter');
+  const total = ackNotices.length;
+
+  if (ackIdx < total) {
+    const n = ackNotices[ackIdx];
+    body.innerHTML = `
+      <div style="font-size:13px;color:#6b7280;margin-bottom:10px;">
+        <b>${escapeHtml(ackCompanyName)}</b> 배송지의 유의사항입니다. 반드시 읽고 확인해주세요.
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;">
+        <div style="font-weight:700;color:#92400e;margin-bottom:10px;">유의사항 ${ackIdx + 1} / ${total}</div>
+        <div style="font-size:15px;line-height:1.7;color:#1f2937;">${escapeHtml(n.content)}</div>
+        ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:12px;max-width:100%;border-radius:8px;">` : ''}
+      </div>`;
+    footer.innerHTML = `
+      <button class="btn btn-gray btn-sm" onclick="cancelNoticeAck()">닫기</button>
+      <button class="btn btn-primary" onclick="nextAckStep()">확인했습니다 (${ackIdx + 1}/${total}) →</button>`;
+  } else {
+    body.innerHTML = `
+      <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:18px;">
+        <div style="font-weight:700;color:#991b1b;margin-bottom:10px;">📋 확인 및 동의</div>
+        <div style="font-size:14px;line-height:1.8;color:#1f2937;">${escapeHtml(ACK_AGREEMENT_TEXT)}</div>
+      </div>
+      <p style="font-size:12px;color:#6b7280;margin-top:10px;">동의 시 확인자·일시·유의사항 내용이 기록으로 남습니다.</p>`;
+    footer.innerHTML = `
+      <button class="btn btn-gray btn-sm" onclick="cancelNoticeAck()">닫기</button>
+      <button class="btn btn-danger" onclick="submitNoticeAck()">동의합니다</button>`;
+  }
+}
+
+function nextAckStep() {
+  ackIdx += 1;
+  renderAckStep();
+}
+
+function cancelNoticeAck() {
+  // 동의하지 않으면 카드를 열 수 없음 (다음에 열 때 다시 확인 절차 진행)
+  document.getElementById('noticeAckModal').classList.add('hidden');
+  ackDeliveryId = null;
+}
+
+async function submitNoticeAck() {
+  try {
+    await api('POST', `/deliveries/${ackDeliveryId}/notice-ack`);
+    const id = ackDeliveryId;
+    document.getElementById('noticeAckModal').classList.add('hidden');
+    ackDeliveryId = null;
+    showToast('✅ 유의사항 확인이 기록되었습니다.');
+    openDetail(id);
+  } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 function renderDetail(d) {
@@ -1995,6 +2112,7 @@ function renderDetail(d) {
           </div>
         </div>`;
       }).join('')}
+      <div id="ack-status-line" style="margin-top:8px;font-size:12px;font-weight:600;"></div>
     </div>` : '';
 
   document.getElementById('detailBody').innerHTML = `
@@ -2071,6 +2189,7 @@ function renderDetail(d) {
   startChat(d.id);
   if (document.getElementById('detail-viewers'))
     renderViewerChecklist('detail-viewers', d.viewer_ids || []);
+  if (notices.length > 0) loadAckStatus(d);
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
 
@@ -2689,7 +2808,7 @@ function refreshCurrentTab() {
 // 모달 바깥 클릭 시 닫기
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
-    if (e.target === overlay && overlay.id !== 'photoViewModal') {
+    if (e.target === overlay && overlay.id !== 'photoViewModal' && overlay.id !== 'noticeAckModal') {
       overlay.classList.add('hidden');
     }
   });
