@@ -89,6 +89,9 @@ class Delivery(Base):
     # 입하: wait→driving→loaded→done
     status = Column(String(10), default="wait")
 
+    # 소프트 삭제: 삭제 시 데이터는 보존하고 화면에서만 숨김
+    is_deleted = Column(Boolean, default=False)
+
     # 단계별 시간 기록
     loading_complete_time = Column(String(5))  # 상차 완료
     driving_time = Column(String(5))           # 운행 시작

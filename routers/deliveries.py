@@ -113,7 +113,9 @@ def get_flow(delivery_type: str):
 
 def _apply_visibility_filter(query, db: Session, current_user: models.User):
     """역할별 배송카드 열람 범위 필터.
-    superadmin: 전체 / driver: 본인 배차 건 / admin: 본인 생성 + 열람 지정된 건"""
+    superadmin: 전체 / driver: 본인 배차 건 / admin: 본인 생성 + 열람 지정된 건
+    소프트 삭제된 카드는 모두 제외"""
+    query = query.filter(models.Delivery.is_deleted.is_not(True))
     if current_user.role == "driver":
         return query.filter(models.Delivery.driver_id == current_user.id)
     if current_user.role == "admin":
@@ -141,6 +143,8 @@ def _can_view_delivery(d: models.Delivery, db: Session, current_user: models.Use
 
 
 def _require_view(d: models.Delivery, db: Session, current_user: models.User):
+    if d.is_deleted:
+        raise HTTPException(status_code=404, detail="삭제된 배송카드입니다.")
     if not _can_view_delivery(d, db, current_user):
         raise HTTPException(status_code=403, detail="이 배송카드에 접근할 권한이 없습니다.")
 
@@ -206,6 +210,8 @@ def update_viewers(
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
+    if d.is_deleted:
+        raise HTTPException(status_code=404, detail="삭제된 배송카드입니다.")
     if current_user.role != "superadmin" and d.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="카드 생성자 또는 슈퍼관리자만 공개 대상을 변경할 수 있습니다.")
     db.query(models.DeliveryViewer).filter(models.DeliveryViewer.delivery_id == delivery_id).delete()
@@ -630,9 +636,8 @@ def delete_delivery(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
-    db.query(models.DeliveryMessage).filter(models.DeliveryMessage.delivery_id == delivery_id).delete()
-    db.query(models.DeliveryViewer).filter(models.DeliveryViewer.delivery_id == delivery_id).delete()
-    db.query(models.DeliveryMessageRead).filter(models.DeliveryMessageRead.delivery_id == delivery_id).delete()
-    db.delete(d)
+    # 소프트 삭제: 데이터(대화·사진·유의사항 동의 기록)는 보존하고 화면에서만 숨김
+    d.is_deleted = True
+    d.updated_at = datetime.utcnow()
     db.commit()
     return {"success": True}

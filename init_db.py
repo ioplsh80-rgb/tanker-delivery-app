@@ -30,6 +30,7 @@ migrations = [
     ("deliveries", "delivery_type", "VARCHAR(10) DEFAULT '출하'"),
     ("deliveries", "driving_time",  "VARCHAR(5)"),
     ("deliveries", "unloaded_time", "VARCHAR(5)"),
+    ("deliveries", "is_deleted",    "BOOLEAN DEFAULT FALSE"),
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
 ]
