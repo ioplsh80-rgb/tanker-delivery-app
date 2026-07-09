@@ -1483,7 +1483,7 @@ function renderNoticeList(notices, companyId) {
     var num = nums[i] || (i + 1);
     var safeContent = (n.content || '').replace(/"/g, '&quot;');
     var photoHTML = n.drive_file_id
-      ? '<div style="margin-left:30px;"><img class="notice-photo-preview" src="https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w200" onclick="viewPhoto(\'https://drive.google.com/thumbnail?id=' + n.drive_file_id + '&sz=w1000\', \'' + n.drive_file_id + '\')"></div>'
+      ? '<div style="margin-left:30px;"><img class="notice-photo-preview" src="/api/photos/' + n.drive_file_id + '" onclick="viewPhoto(\'/api/photos/' + n.drive_file_id + '\', \'' + n.drive_file_id + '\')"></div>'
       : '';
     html += '<div class="notice-item" id="notice-item-' + n.id + '">'
       + '<div class="notice-item-row">'
@@ -1972,7 +1972,7 @@ function renderDetail(d) {
   const photosHTML = d.photos && d.photos.length
     ? `<div class="photo-preview-grid">${d.photos.map(p => {
         const src = p.drive_file_id
-          ? `https://drive.google.com/thumbnail?id=${p.drive_file_id}&sz=w800`
+          ? `/api/photos/${p.drive_file_id}`
           : p.photo_data;
         return `<div class="photo-thumb"><img src="${src}" onclick="viewPhoto('${src}', ${p.drive_file_id ? `'${p.drive_file_id}'` : 'null'})"></div>`;
       }).join('')}</div>`
@@ -1991,7 +1991,7 @@ function renderDetail(d) {
           <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
           <div>
             <div>${escapeHtml(n.content)}</div>
-            ${n.drive_file_id ? `<img src="https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w400" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${n.drive_file_id}&sz=w1000', '${n.drive_file_id}')">` : ''}
+            ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('/api/photos/${n.drive_file_id}', '${n.drive_file_id}')">` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -2579,7 +2579,7 @@ function renderChatMsg(m) {
   const mine = currentUser && m.user_id === currentUser.id;
   const roleLabel = m.user_role === 'driver' ? '기사' : '관리자';
   const img = m.drive_file_id
-    ? `<img class="chat-img" src="https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w400" onclick="viewPhoto('https://drive.google.com/thumbnail?id=${m.drive_file_id}&sz=w1000', '${m.drive_file_id}')">`
+    ? `<img class="chat-img" src="/api/photos/${m.drive_file_id}" onclick="viewPhoto('/api/photos/${m.drive_file_id}', '${m.drive_file_id}')">`
     : '';
   const text = m.content ? `<div class="chat-bubble">${escapeHtml(m.content)}</div>` : '';
   return `<div class="chat-msg ${mine ? 'mine' : 'other'}">
@@ -2667,7 +2667,7 @@ function viewPhoto(src, fileId) {
 function downloadViewedPhoto() {
   if (viewedPhotoFileId) {
     // Google Drive 원본 다운로드
-    window.open(`https://drive.google.com/uc?export=download&id=${viewedPhotoFileId}`, '_blank');
+    window.open(`/api/photos/${viewedPhotoFileId}?download=1`, '_blank');
   } else if (viewedPhotoSrc && viewedPhotoSrc.startsWith('data:')) {
     // 레거시 base64 사진
     const a = document.createElement('a');

@@ -89,30 +89,9 @@ def update_company(
 
 
 def _upload_notice_photo(contents: bytes, filename: str, mime_type: str):
-    try:
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-        from googleapiclient.http import MediaIoBaseUpload
-        client_id = os.getenv("GOOGLE_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-        refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
-        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
-        if not all([client_id, client_secret, refresh_token, folder_id]):
-            return None
-        creds = Credentials(token=None, refresh_token=refresh_token, client_id=client_id,
-                            client_secret=client_secret, token_uri="https://oauth2.googleapis.com/token")
-        service = build("drive", "v3", credentials=creds)
-        file_metadata = {"name": filename, "parents": [folder_id]}
-        media = MediaIoBaseUpload(io.BytesIO(contents), mimetype=mime_type)
-        file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        file_id = file.get("id")
-        service.permissions().create(fileId=file_id, body={"role": "reader", "type": "anyone"}).execute()
-        return file_id
-    except Exception as e:
-        import traceback
-        print(f"[주의사항 사진 업로드 실패] {e}")
-        traceback.print_exc()
-        return None
+    """주의사항 사진을 Drive에 비공개 업로드 (열람은 /api/photos 프록시 경유)."""
+    from routers.deliveries import _upload_to_drive
+    return _upload_to_drive(contents, filename, mime_type, subfolder="주의사항_사진")
 
 
 @router.post("/{company_id}/notices", response_model=schemas.CompanyNoticeResponse)

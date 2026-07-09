@@ -17,30 +17,36 @@ from database import get_db
 from routers.auth import get_current_user
 
 
+def get_drive_service():
+    """Google Drive API 서비스 객체 생성. 환경변수 미비 시 None."""
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
+    if not all([client_id, client_secret, refresh_token]):
+        return None
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        client_id=client_id,
+        client_secret=client_secret,
+        token_uri="https://oauth2.googleapis.com/token",
+    )
+    return build("drive", "v3", credentials=creds)
+
+
 def _upload_to_drive(contents: bytes, filename: str, mime_type: str, subfolder: Optional[str] = None) -> Optional[str]:
-    """Google Drive에 파일 업로드, 파일 ID 반환. 실패 시 None.
+    """Google Drive에 파일 업로드(비공개), 파일 ID 반환. 실패 시 None.
     subfolder 지정 시 기본 폴더 아래 해당 이름의 하위폴더에 저장 (없으면 생성)."""
     try:
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
 
-        client_id = os.getenv("GOOGLE_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-        refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
         folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
-
-        if not all([client_id, client_secret, refresh_token, folder_id]):
+        service = get_drive_service()
+        if not service or not folder_id:
             return None
-
-        creds = Credentials(
-            token=None,
-            refresh_token=refresh_token,
-            client_id=client_id,
-            client_secret=client_secret,
-            token_uri="https://oauth2.googleapis.com/token",
-        )
-        service = build("drive", "v3", credentials=creds)
 
         if subfolder:
             q = (f"name = '{subfolder}' and mimeType = 'application/vnd.google-apps.folder' "
@@ -60,15 +66,8 @@ def _upload_to_drive(contents: bytes, filename: str, mime_type: str, subfolder: 
         file_metadata = {"name": filename, "parents": [folder_id]}
         media = MediaIoBaseUpload(io.BytesIO(contents), mimetype=mime_type)
         file = service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        file_id = file.get("id")
-
-        # 누구나 링크로 볼 수 있도록 공개
-        service.permissions().create(
-            fileId=file_id,
-            body={"role": "reader", "type": "anyone"},
-        ).execute()
-
-        return file_id
+        # 공개 권한을 걸지 않음 - 열람은 서버 프록시(/api/photos)가 권한 확인 후 제공
+        return file.get("id")
     except Exception as e:
         import traceback
         print(f"[Drive 업로드 실패] {e}")
