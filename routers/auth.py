@@ -1,5 +1,6 @@
 import calendar
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -74,17 +75,39 @@ def get_current_user(
     return user
 
 
+# ── 로그인 시도 제한: 10회 실패 시 5분 차단 ──────────────
+LOGIN_FAIL_LIMIT = 10
+LOGIN_BLOCK_SECONDS = 300
+_login_fails: dict = {}   # "IP|아이디" → 최근 실패 시각 목록
+
+
+def _login_key(request: Request, username: str) -> str:
+    ip = (request.headers.get("x-forwarded-for")
+          or (request.client.host if request.client else "?")).split(",")[0].strip()
+    return f"{ip}|{username}"
+
+
 @router.post("/login", response_model=schemas.Token)
 def login(
+    request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    key = _login_key(request, form_data.username)
+    now = time.time()
+    fails = [t for t in _login_fails.get(key, []) if now - t < LOGIN_BLOCK_SECONDS]
+    if len(fails) >= LOGIN_FAIL_LIMIT:
+        raise HTTPException(status_code=429, detail="로그인 시도가 너무 많습니다. 5분 후 다시 시도해주세요.")
+
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
+        fails.append(now)
+        _login_fails[key] = fails
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="비활성화된 계정입니다.")
+    _login_fails.pop(key, None)   # 성공 시 실패 기록 초기화
 
     token = create_access_token({"sub": user.username})
     # HttpOnly 쿠키: 자바스크립트에서 접근 불가 (XSS로 토큰 탈취 방지)

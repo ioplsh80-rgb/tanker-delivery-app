@@ -655,6 +655,7 @@ header h2 { font-size: 16px; font-weight: 700; }
           <label>역할 *</label>
           <select id="u-role">
             <option value="admin">관리자</option>
+            <option value="superadmin">슈퍼관리자</option>
           </select>
         </div>
       </div>
@@ -2545,6 +2546,7 @@ async function loadUsers() {
         </td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditUserModal(${u.id},'${escArg(u.name)}','${escArg(u.department)}','${escArg(u.phone)}','${escArg(u.email)}')">수정</button>
+          ${u.id !== currentUser.id ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;margin-right:4px;" onclick="openChangePasswordModal(${u.id},'${escArg(u.name)}')">비밀번호</button>` : ''}
           ${u.role !== 'superadmin' && u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.id},'${escArg(u.name)}')">비활성화</button>` : ''}
         </td>
       </tr>
