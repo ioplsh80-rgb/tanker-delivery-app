@@ -84,6 +84,29 @@ INBOUND_FLOW  = ["wait", "driving", "loaded", "done"]
 
 ADMIN_ROLES = ("admin", "superadmin")
 
+STATUS_LABELS = {
+    "wait": "대기중", "loaded": "상차완료", "driving": "운행중",
+    "unloaded": "하차완료", "done": "완료", "cancel": "취소",
+}
+
+
+def _validate_status_transition(d, new_status: str):
+    """상태 변경이 출하/입하 흐름의 바로 다음 단계인지 검증."""
+    flow = get_flow(d.delivery_type)
+    if new_status == "cancel":
+        if d.status != "wait":
+            raise HTTPException(status_code=400, detail="대기중 상태에서만 취소할 수 있습니다.")
+        return
+    if new_status not in flow:
+        raise HTTPException(status_code=400, detail="알 수 없는 상태값입니다.")
+    if d.status not in flow:
+        raise HTTPException(status_code=400, detail=f"현재 상태({STATUS_LABELS.get(d.status, d.status)})에서는 변경할 수 없습니다.")
+    if flow.index(new_status) != flow.index(d.status) + 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"순서에 맞지 않는 상태 변경입니다. (현재: {STATUS_LABELS.get(d.status)}, 요청: {STATUS_LABELS.get(new_status)})",
+        )
+
 
 def get_flow(delivery_type: str):
     return OUTBOUND_FLOW if delivery_type == "출하" else INBOUND_FLOW
@@ -358,6 +381,7 @@ def update_status(
             raise HTTPException(status_code=403, detail="7일이 지난 배송은 수정할 수 없습니다.")
 
     if update.status:
+        _validate_status_transition(d, update.status)
         d.status = update.status
     if update.loading_complete_time:
         d.loading_complete_time = update.loading_complete_time
@@ -466,6 +490,14 @@ async def upload_photos(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
+
+    # 완료 직전 단계(출하: 하차완료, 입하: 상차완료)에서만 계근표 등록 가능
+    flow = get_flow(d.delivery_type)
+    if d.status != flow[-2]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{STATUS_LABELS.get(flow[-2])} 상태에서만 계근표를 등록할 수 있습니다. (현재: {STATUS_LABELS.get(d.status, d.status)})",
+        )
 
     for file in files:
         contents = await file.read()
