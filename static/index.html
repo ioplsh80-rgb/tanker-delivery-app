@@ -1166,6 +1166,12 @@ async function initApp() {
   } else {
     document.getElementById('driverTabs').classList.remove('hidden');
     document.getElementById('headerTitle').textContent = '기사 배송 현황';
+    // 관리자용 화면(대시보드 등)을 전부 숨기고 기사 화면만 표시
+    ['dashboard','deliveries','drivers','vehicles','items','companies','users','myHistory'].forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      if (el) el.classList.add('hidden');
+    });
+    document.getElementById('tab-myDeliveries').classList.remove('hidden');
     currentTab = 'myDeliveries';
     await loadCompanies();   // 유의사항 표시에 필요
     await loadMyDeliveries();
