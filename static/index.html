@@ -2123,7 +2123,6 @@ function renderDetail(d) {
       </div>
       <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
     </div>
-    ${noticeBannerHTML}
     <div class="status-flow">${stepsHTML}</div>
 
     <div class="detail-section">
@@ -2184,6 +2183,8 @@ function renderDetail(d) {
         </div>
       </div>
     </div>
+
+    ${noticeBannerHTML}
   `;
 
   startChat(d.id);
