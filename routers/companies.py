@@ -30,8 +30,8 @@ def create_company(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="관리자만 고객사를 추가할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 고객사를 추가할 수 있습니다.")
     existing = db.query(models.Company).filter(models.Company.name == company.name).first()
     if existing:
         if existing.is_active:
@@ -101,8 +101,8 @@ def add_notice(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="관리자만 주의사항을 추가할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 주의사항을 추가할 수 있습니다.")
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="고객사를 찾을 수 없습니다.")
@@ -124,8 +124,8 @@ def update_notice(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="관리자만 주의사항을 수정할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 주의사항을 수정할 수 있습니다.")
     notice = db.query(models.CompanyNotice).filter(
         models.CompanyNotice.id == notice_id,
         models.CompanyNotice.company_id == company_id
@@ -145,8 +145,8 @@ def delete_notice(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="관리자만 주의사항을 삭제할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 주의사항을 삭제할 수 있습니다.")
     notice = db.query(models.CompanyNotice).filter(
         models.CompanyNotice.id == notice_id,
         models.CompanyNotice.company_id == company_id
@@ -166,8 +166,8 @@ async def upload_notice_photo(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="관리자만 사진을 업로드할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 사진을 업로드할 수 있습니다.")
     notice = db.query(models.CompanyNotice).filter(
         models.CompanyNotice.id == notice_id,
         models.CompanyNotice.company_id == company_id
@@ -192,8 +192,8 @@ def delete_company(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="관리자만 고객사를 삭제할 수 있습니다.")
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 고객사를 삭제할 수 있습니다.")
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="고객사를 찾을 수 없습니다.")
