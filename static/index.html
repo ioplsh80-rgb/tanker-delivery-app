@@ -1493,7 +1493,7 @@ function renderNoticeList(notices, companyId) {
   var html = '';
   notices.forEach(function(n, i) {
     var num = nums[i] || (i + 1);
-    var safeContent = (n.content || '').replace(/"/g, '&quot;');
+    var safeContent = escapeHtml(n.content || '');
     var photoHTML = n.drive_file_id
       ? '<div style="margin-left:30px;"><img class="notice-photo-preview" src="/api/photos/' + n.drive_file_id + '" onclick="viewPhoto(\'/api/photos/' + n.drive_file_id + '\', \'' + n.drive_file_id + '\')"></div>'
       : '';
