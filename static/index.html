@@ -2543,8 +2543,9 @@ async function loadUsers() {
         <td style="text-align:center;">
           <input type="checkbox" ${u.can_assign_vehicle?'checked':''} onchange="updatePermission(${u.id},'can_assign_vehicle',this.checked)" ${u.role==='superadmin'?'disabled':''}>
         </td>
-        <td>
-          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="openEditUserModal(${u.id},'${escArg(u.name)}','${escArg(u.department)}','${escArg(u.phone)}','${escArg(u.email)}')">수정</button>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditUserModal(${u.id},'${escArg(u.name)}','${escArg(u.department)}','${escArg(u.phone)}','${escArg(u.email)}')">수정</button>
+          ${u.role !== 'superadmin' && u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.id},'${escArg(u.name)}')">비활성화</button>` : ''}
         </td>
       </tr>
     `).join('');
@@ -2562,6 +2563,15 @@ function openAddUserModal() {
   document.getElementById('u-can-create').checked = false;
   document.getElementById('u-can-assign').checked = false;
   document.getElementById('addUserModal').classList.remove('hidden');
+}
+
+async function deactivateUser(id, name) {
+  if (!confirm(`'${name}' 계정을 비활성화하시겠습니까?\n비활성화하면 로그인할 수 없게 됩니다.`)) return;
+  try {
+    await api('PATCH', `/users/${id}/deactivate`, {});
+    showToast('✅ 계정이 비활성화되었습니다.');
+    loadUsers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 function openEditUserModal(id, name, department, phone, email) {
