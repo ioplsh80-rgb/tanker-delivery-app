@@ -32,6 +32,8 @@ def get_drivers(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    if current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="관리자만 기사 목록을 조회할 수 있습니다.")
     return (
         db.query(models.User)
         .filter(models.User.role == "driver", models.User.is_active == True)
