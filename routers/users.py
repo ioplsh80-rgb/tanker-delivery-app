@@ -9,6 +9,13 @@ from routers.auth import get_current_user, get_password_hash, verify_password
 
 router = APIRouter()
 
+PASSWORD_MIN_LENGTH = 5
+
+
+def _validate_password(password: str):
+    if not password or len(password) < PASSWORD_MIN_LENGTH:
+        raise HTTPException(status_code=400, detail=f"비밀번호는 최소 {PASSWORD_MIN_LENGTH}자 이상이어야 합니다.")
+
 
 @router.get("/", response_model=List[schemas.UserResponse])
 def get_all_users(
@@ -58,6 +65,7 @@ def create_user(
         raise HTTPException(status_code=403, detail="슈퍼관리자만 사용자를 생성할 수 있습니다.")
     if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디입니다.")
+    _validate_password(user.password)
 
     db_user = models.User(
         name=user.name,
@@ -116,6 +124,7 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    _validate_password(body.password)
     # 본인: 현재 비밀번호 확인 후 변경 가능 / 타인: 슈퍼관리자만 가능
     if current_user.id == user_id:
         if not body.current_password or not verify_password(body.current_password, current_user.password_hash):
