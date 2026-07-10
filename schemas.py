@@ -162,10 +162,9 @@ class DeliveryAssign(BaseModel):
 
 class DeliveryUpdate(BaseModel):
     status: Optional[str] = None
+    work_start_time: Optional[str] = None
     loading_complete_time: Optional[str] = None
-    driving_time: Optional[str] = None
     unloaded_time: Optional[str] = None
-    complete_time: Optional[str] = None
     complete_memo: Optional[str] = None
 
 
@@ -208,9 +207,10 @@ class DeliveryResponse(BaseModel):
     delivery_type: str = "출하"
     notes: Optional[str]
     status: str
+    work_start_time: Optional[str] = None
     loading_complete_time: Optional[str]
-    driving_time: Optional[str]
     unloaded_time: Optional[str]
+    weighed_time: Optional[str] = None
     complete_time: Optional[str]
     complete_memo: Optional[str]
     created_at: datetime

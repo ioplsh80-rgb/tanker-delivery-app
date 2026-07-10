@@ -85,20 +85,22 @@ class Delivery(Base):
     delivery_type = Column(String(10), default="출하")       # 출하 / 입하
     notes = Column(Text)                                    # 특이사항
 
-    # 상태: wait / loaded / driving / unloaded / done / cancel
-    # 출하: wait→loaded→driving→unloaded→done
-    # 입하: wait→driving→loaded→done
+    # 상태: wait / start / loaded / unloaded / weighed / done / cancel
+    # 통합 흐름(출하·입하 동일): 대기중→업무시작→상차→하차→계근표등록→완료
+    # (weighed는 계근표 등록 시 거쳐가는 단계로, 등록 즉시 완료로 자동 전환)
     status = Column(String(10), default="wait")
 
     # 소프트 삭제: 삭제 시 데이터는 보존하고 화면에서만 숨김
     is_deleted = Column(Boolean, default=False)
 
     # 단계별 시간 기록
-    loading_complete_time = Column(String(5))  # 상차 완료
-    driving_time = Column(String(5))           # 운행 시작
-    unloaded_time = Column(String(5))          # 하차 완료
+    work_start_time = Column(String(5))        # 업무시작
+    loading_complete_time = Column(String(5))  # 상차
+    unloaded_time = Column(String(5))          # 하차
+    weighed_time = Column(String(5))           # 계근표 등록
     complete_time = Column(String(5))          # 완료
     complete_memo = Column(Text)
+    driving_time = Column(String(5))           # (구버전) 운행 시작 - 과거 데이터 보존용
 
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)

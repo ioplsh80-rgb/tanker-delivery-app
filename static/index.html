@@ -31,7 +31,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .badge-wait     { background: #fef3c7; color: #92400e; }
 .badge-loaded   { background: #ede9fe; color: #5b21b6; }
 .badge-departed { background: #dbeafe; color: #1e40af; }
-.badge-driving  { background: #dbeafe; color: #1e40af; }
+.badge-start    { background: #dbeafe; color: #1e40af; }
 .badge-unloaded { background: #ccfbf1; color: #0f766e; }
 .badge-done     { background: #dcfce7; color: #166534; }
 .badge-cancel   { background: #fee2e2; color: #991b1b; }
@@ -141,7 +141,7 @@ header h2 { font-size: 16px; font-weight: 700; }
 .delivery-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
 .delivery-card.wait     { border-left-color: #d97706; }
 .delivery-card.loaded   { border-left-color: #7c3aed; }
-.delivery-card.driving  { border-left-color: #2563eb; }
+.delivery-card.start    { border-left-color: #2563eb; }
 .delivery-card.unloaded { border-left-color: #0d9488; }
 .delivery-card.done     { border-left-color: #16a34a; }
 .delivery-card.cancel   { border-left-color: #dc2626; }
@@ -326,9 +326,9 @@ header h2 { font-size: 16px; font-weight: 700; }
         <select id="filterStatus" onchange="loadDeliveries()">
           <option value="">전체 상태</option>
           <option value="wait">대기중</option>
-          <option value="loaded">상차완료</option>
-          <option value="driving">운행중</option>
-          <option value="unloaded">하차완료</option>
+          <option value="start">업무시작</option>
+          <option value="loaded">상차</option>
+          <option value="unloaded">하차</option>
           <option value="done">완료</option>
           <option value="cancel">취소</option>
         </select>
@@ -1028,32 +1028,32 @@ let currentActionId = null;
 let currentTab = '';
 let deliveriesCache = {};
 
+// 통합 흐름 (출하·입하 동일): 대기중→업무시작→상차→하차→계근표등록→완료
+const FLOW_STEPS  = ['wait', 'start', 'loaded', 'unloaded', 'weighed', 'done'];
+const FLOW_LABELS = ['대기중', '업무시작', '상차', '하차', '계근표', '완료'];
+const PROGRESS_STATUSES = ['start', 'loaded', 'unloaded'];
+
 const STATUS_LABELS = {
-  wait: '대기중', loaded: '상차완료', driving: '운행중', unloaded: '하차완료',
-  done: '완료', cancel: '취소'
+  wait: '대기중', start: '업무시작', loaded: '상차', unloaded: '하차',
+  weighed: '계근표 등록', done: '완료', cancel: '취소'
 };
 const STATUS_BADGE = {
-  wait: 'badge-wait', loaded: 'badge-loaded', driving: 'badge-driving',
-  unloaded: 'badge-unloaded', done: 'badge-done', cancel: 'badge-cancel'
+  wait: 'badge-wait', start: 'badge-start', loaded: 'badge-loaded',
+  unloaded: 'badge-unloaded', weighed: 'badge-progress', done: 'badge-done', cancel: 'badge-cancel'
 };
 
 function cardBadgeLabel(status) {
-  if (['loaded','driving','unloaded'].includes(status)) return '진행중';
+  if (PROGRESS_STATUSES.includes(status)) return '진행중';
   return STATUS_LABELS[status] || status;
 }
 function cardBadgeClass(status) {
-  if (['loaded','driving','unloaded'].includes(status)) return 'badge-progress';
+  if (PROGRESS_STATUSES.includes(status)) return 'badge-progress';
   return STATUS_BADGE[status] || '';
 }
 
 function driverStatusSteps(d) {
-  const isOut = (d.delivery_type || '출하') === '출하';
-  const steps = isOut
-    ? ['wait', 'loaded', 'driving', 'unloaded', 'done']
-    : ['wait', 'driving', 'loaded', 'done'];
-  const labels = isOut
-    ? ['대기중', '상차완료', '운행중', '하차완료', '완료']
-    : ['대기중', '운행중', '상차완료', '완료'];
+  const steps = FLOW_STEPS;
+  const labels = FLOW_LABELS;
   const curIdx = steps.indexOf(d.status);
   return `<div class="mini-steps">${steps.map((s, i) => {
     const cls = i < curIdx ? 'done' : (i === curIdx ? 'active' : '');
@@ -1648,7 +1648,7 @@ async function loadDashboard() {
   try {
     const list = await api('GET', `/deliveries/?date=${today}`);
     document.getElementById('stat-wait').textContent     = list.filter(d => d.status === 'wait').length;
-    document.getElementById('stat-progress').textContent = list.filter(d => ['loaded','driving','unloaded'].includes(d.status)).length;
+    document.getElementById('stat-progress').textContent = list.filter(d => PROGRESS_STATUSES.includes(d.status)).length;
     document.getElementById('stat-done').textContent     = list.filter(d => d.status === 'done').length;
     document.getElementById('stat-total').textContent    = list.length;
     document.getElementById('dashboardList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('오늘 배송이 없습니다.');
@@ -1691,7 +1691,7 @@ async function loadDriverStatus() {
     const list = await api('GET', `/deliveries/?date=${today}`);
     const html = drivers.map(dr => {
       const myD     = list.filter(d => d.driver_id === dr.id);
-      const active  = myD.find(d => ['loaded','driving','unloaded'].includes(d.status));
+      const active  = myD.find(d => PROGRESS_STATUSES.includes(d.status));
       const doneC   = myD.filter(d => d.status === 'done').length;
       const waitC   = myD.filter(d => d.status === 'wait').length;
       const curVeh  = active ? active.vehicle_number : '-';
@@ -1808,8 +1808,20 @@ function deliveryCardHTML(d, mode) {
   </div>`;
 }
 
+// 기사 다음 단계 버튼 (통합 흐름)
+function driverNextButton(d) {
+  if (d.status === 'wait')
+    return `<button class="btn btn-primary btn-sm" onclick="confirmStart(${d.id})">▶️ 업무시작</button>`;
+  if (d.status === 'start')
+    return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차</button>`;
+  if (d.status === 'loaded')
+    return `<button class="btn btn-primary btn-sm" onclick="confirmUnloaded(${d.id})">📥 하차</button>`;
+  if (d.status === 'unloaded')
+    return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+  return '';
+}
+
 function buildCardActions(d, mode) {
-  const isOut = (d.delivery_type || '출하') === '출하';
   const revert = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
 
   if (mode === 'admin') {
@@ -1821,19 +1833,12 @@ function buildCardActions(d, mode) {
       parts.push(`<button class="btn btn-danger btn-sm" onclick="changeStatus(${d.id},'cancel')">취소</button>`);
     if (d.status === 'cancel')
       parts.push(`<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 취소 철회</button>`);
-    if (isOut) {
-      if (d.status === 'loaded')
-        parts.push(revert, `<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`);
-      if (d.status === 'driving')
-        parts.push(revert, `<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'unloaded')">📥 하차완료 처리</button>`);
-      if (d.status === 'unloaded')
-        parts.push(revert, `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">✅ 완료 처리</button>`);
-    } else {
-      if (d.status === 'driving')
-        parts.push(revert, `<button class="btn btn-purple btn-sm" onclick="changeStatus(${d.id},'loaded')">📦 상차완료 처리</button>`);
-      if (d.status === 'loaded')
-        parts.push(revert, `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`);
-    }
+    if (d.status === 'start')
+      parts.push(revert, `<button class="btn btn-purple btn-sm" onclick="changeStatus(${d.id},'loaded')">📦 상차 처리</button>`);
+    if (d.status === 'loaded')
+      parts.push(revert, `<button class="btn btn-primary btn-sm" onclick="changeStatus(${d.id},'unloaded')">📥 하차 처리</button>`);
+    if (d.status === 'unloaded')
+      parts.push(revert, `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`);
     if (currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
       parts.push(`<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="event.stopPropagation();openEditDeliveryModal(${d.id})">✏️ 수정</button>`);
     return parts.join('');
@@ -1843,41 +1848,15 @@ function buildCardActions(d, mode) {
       const canEdit = isWithinWeek(d.scheduled_date);
       let btns = '';
       if (canEdit && d.status !== 'cancel') {
-        if (isOut) {
-          if (d.status === 'wait')    btns += `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-          if (d.status === 'loaded')  btns += `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
-          if (d.status === 'driving') btns += `<button class="btn btn-primary btn-sm" onclick="confirmUnloaded(${d.id})">📥 하차 완료</button>`;
-          if (d.status === 'unloaded') btns += `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-        } else {
-          if (d.status === 'wait')    btns += `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
-          if (d.status === 'driving') btns += `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-          if (d.status === 'loaded')  btns += `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-        }
+        btns += driverNextButton(d);
         if (d.status !== 'wait')
-          btns += `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
+          btns += revert;   // 완료 건도 1주일 내에는 되돌려 계근표 재등록 가능
       }
       return btns;
     }
     // driver 모드: 오늘 활성 배송
-    if (isOut) {
-      if (d.status === 'wait')
-        return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-      if (d.status === 'loaded')
-        return `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
-      if (d.status === 'driving')
-        return `<button class="btn btn-primary btn-sm" onclick="confirmUnloaded(${d.id})">📥 하차 완료</button>`;
-      if (d.status === 'unloaded')
-        return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-    } else {
-      if (d.status === 'wait')
-        return `<button class="btn btn-primary btn-sm" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
-      if (d.status === 'driving')
-        return `<button class="btn btn-purple btn-sm" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-      if (d.status === 'loaded')
-        return `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-    }
+    return driverNextButton(d);
   }
-  return '';
 }
 
 // ═══════════════════════════════════════════════════
@@ -1888,10 +1867,9 @@ async function changeStatus(id, status) {
   if (!confirm(`"${label}"으로 처리하시겠습니까?`)) return;
   try {
     const body = { status };
+    if (status === 'start')    body.work_start_time = nowTime();
     if (status === 'loaded')   body.loading_complete_time = nowTime();
-    if (status === 'driving')  body.driving_time  = nowTime();
     if (status === 'unloaded') body.unloaded_time = nowTime();
-    if (status === 'done')     body.complete_time = nowTime();
     await api('PATCH', `/deliveries/${id}/status`, body);
     showToast(`"${label}"으로 변경되었습니다.`);
     refreshCurrentTab();
@@ -1910,49 +1888,36 @@ async function revertStatus(id) {
 }
 
 // ═══════════════════════════════════════════════════
-// 상차 완료 처리 (기사)
+// 기사 단계 진행 (통합 흐름)
 // ═══════════════════════════════════════════════════
-async function confirmLoaded(id) {
-  if (!confirm('상차 완료 처리하시겠습니까?')) return;
+async function confirmStart(id) {
+  if (!confirm('업무를 시작하시겠습니까?')) return;
   try {
-    await api('PATCH', `/deliveries/${id}/status`, {
-      status: 'loaded',
-      loading_complete_time: nowTime(),
-    });
-    showToast('✅ 상차 완료 처리되었습니다.');
+    await api('PATCH', `/deliveries/${id}/status`, { status: 'start', work_start_time: nowTime() });
+    showToast('▶️ 업무시작 처리되었습니다.');
     refreshCurrentTab();
     closeModal('detailModal');
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
-// ═══════════════════════════════════════════════════
-// 출발 처리 (기사)
-// ═══════════════════════════════════════════════════
-async function confirmDriving(id) {
-  if (!confirm('운행 처리하시겠습니까?')) return;
+async function confirmLoaded(id) {
+  if (!confirm('상차 처리하시겠습니까?')) return;
   try {
-    await api('PATCH', `/deliveries/${id}/status`, { status: 'driving', driving_time: nowTime() });
-    showToast('🚛 운행 처리되었습니다.');
+    await api('PATCH', `/deliveries/${id}/status`, {
+      status: 'loaded',
+      loading_complete_time: nowTime(),
+    });
+    showToast('📦 상차 처리되었습니다.');
     refreshCurrentTab();
     closeModal('detailModal');
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 async function confirmUnloaded(id) {
-  if (!confirm('하차 완료 처리하시겠습니까?')) return;
+  if (!confirm('하차 처리하시겠습니까?')) return;
   try {
     await api('PATCH', `/deliveries/${id}/status`, { status: 'unloaded', unloaded_time: nowTime() });
-    showToast('📥 하차 완료 처리되었습니다.');
-    refreshCurrentTab();
-    closeModal('detailModal');
-  } catch (e) { showToast('⚠️ ' + e.message); }
-}
-
-async function confirmInboundDone(id) {
-  if (!confirm('하차 완료 처리하시겠습니까?\n(입하 완료로 처리됩니다)')) return;
-  try {
-    await api('PATCH', `/deliveries/${id}/status`, { status: 'done', complete_time: nowTime() });
-    showToast('🏁 입하 완료 처리되었습니다.');
+    showToast('📥 하차 처리되었습니다.');
     refreshCurrentTab();
     closeModal('detailModal');
   } catch (e) { showToast('⚠️ ' + e.message); }
@@ -2079,13 +2044,8 @@ async function submitNoticeAck() {
 }
 
 function renderDetail(d) {
-  const isOut = (d.delivery_type || '출하') === '출하';
-  const steps = isOut
-    ? ['wait','loaded','driving','unloaded','done']
-    : ['wait','driving','loaded','done'];
-  const stepLabels = isOut
-    ? ['대기중','상차완료','운행중','하차완료','완료']
-    : ['대기중','운행중','상차완료','완료'];
+  const steps = FLOW_STEPS;
+  const stepLabels = FLOW_LABELS;
   const curIdx = steps.indexOf(d.status === 'cancel' ? 'wait' : d.status);
 
   const stepsHTML = steps.map((s, i) => {
@@ -2154,9 +2114,10 @@ function renderDetail(d) {
     <div class="detail-section">
       <h4>시간 기록</h4>
       <div class="detail-grid">
-        <div><div class="di-label">상차 완료</div><div class="di-val">${d.loading_complete_time || '-'}</div></div>
-        <div><div class="di-label">운행 시작</div><div class="di-val">${d.driving_time || '-'}</div></div>
-        <div><div class="di-label">하차 완료</div><div class="di-val">${d.unloaded_time || '-'}</div></div>
+        <div><div class="di-label">업무시작</div><div class="di-val">${d.work_start_time || '-'}</div></div>
+        <div><div class="di-label">상차</div><div class="di-val">${d.loading_complete_time || '-'}</div></div>
+        <div><div class="di-label">하차</div><div class="di-val">${d.unloaded_time || '-'}</div></div>
+        <div><div class="di-label">계근표 등록</div><div class="di-val">${d.weighed_time || '-'}</div></div>
         <div><div class="di-label">완료</div><div class="di-val">${d.complete_time || '-'}</div></div>
       </div>
     </div>
@@ -2215,37 +2176,21 @@ function renderDetail(d) {
       footer += `<button class="btn btn-danger" onclick="changeStatus(${d.id},'cancel')">취소</button>`;
     if (d.status === 'cancel')
       footer += `<button class="btn btn-warning" onclick="revertStatus(${d.id})">↩️ 취소 철회</button>`;
-    if (isOut) {
-      if (d.status === 'loaded')
-        footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'driving')">🚛 운행 처리</button>`;
-      if (d.status === 'driving')
-        footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'unloaded')">📥 하차완료</button>`;
-      if (d.status === 'unloaded')
-        footer += `${rv}<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">✅ 완료 처리</button>`;
-    } else {
-      if (d.status === 'driving')
-        footer += `${rv}<button class="btn btn-purple" onclick="changeStatus(${d.id},'loaded')">📦 상차완료</button>`;
-      if (d.status === 'loaded')
-        footer += `${rv}<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-    }
+    if (d.status === 'start')
+      footer += `${rv}<button class="btn btn-purple" onclick="changeStatus(${d.id},'loaded')">📦 상차 처리</button>`;
+    if (d.status === 'loaded')
+      footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'unloaded')">📥 하차 처리</button>`;
+    if (d.status === 'unloaded')
+      footer += `${rv}<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
   } else {
-    if (isOut) {
-      if (d.status === 'wait')
-        footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-      if (d.status === 'loaded')
-        footer += `<button class="btn btn-primary" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
-      if (d.status === 'driving')
-        footer += `<button class="btn btn-primary" onclick="confirmUnloaded(${d.id})">📥 하차 완료</button>`;
-      if (d.status === 'unloaded')
-        footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-    } else {
-      if (d.status === 'wait')
-        footer += `<button class="btn btn-primary" onclick="confirmDriving(${d.id})">🚛 운행</button>`;
-      if (d.status === 'driving')
-        footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차 완료</button>`;
-      if (d.status === 'loaded')
-        footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
-    }
+    if (d.status === 'wait')
+      footer += `<button class="btn btn-primary" onclick="confirmStart(${d.id})">▶️ 업무시작</button>`;
+    if (d.status === 'start')
+      footer += `<button class="btn btn-purple" onclick="confirmLoaded(${d.id})">📦 상차</button>`;
+    if (d.status === 'loaded')
+      footer += `<button class="btn btn-primary" onclick="confirmUnloaded(${d.id})">📥 하차</button>`;
+    if (d.status === 'unloaded')
+      footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
   }
   document.getElementById('detailFooter').innerHTML = footer;
 }

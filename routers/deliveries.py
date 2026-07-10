@@ -76,31 +76,39 @@ def _upload_to_drive(contents: bytes, filename: str, mime_type: str, subfolder: 
 
 router = APIRouter()
 
-# 출하: 대기중→상차완료→운행→하차완료→완료(계근표)
-OUTBOUND_FLOW = ["wait", "loaded", "driving", "unloaded", "done"]
-# 입하: 대기중→운행→상차완료→완료(자동)
-INBOUND_FLOW  = ["wait", "driving", "loaded", "done"]
+# 통합 흐름 (출하·입하 동일): 대기중→업무시작→상차→하차→계근표등록→완료
+# weighed(계근표등록)는 사진 등록 시 거쳐가는 단계로, 등록 즉시 완료로 자동 전환
+FLOW = ["wait", "start", "loaded", "unloaded", "weighed", "done"]
 
 ADMIN_ROLES = ("admin", "superadmin")
 
 STATUS_LABELS = {
-    "wait": "대기중", "loaded": "상차완료", "driving": "운행중",
-    "unloaded": "하차완료", "done": "완료", "cancel": "취소",
+    "wait": "대기중", "start": "업무시작", "loaded": "상차",
+    "unloaded": "하차", "weighed": "계근표 등록", "done": "완료", "cancel": "취소",
+}
+
+STATUS_TIME_FIELDS = {
+    "start": "work_start_time",
+    "loaded": "loading_complete_time",
+    "unloaded": "unloaded_time",
+    "weighed": "weighed_time",
+    "done": "complete_time",
 }
 
 
 def _validate_status_transition(d, new_status: str):
-    """상태 변경이 출하/입하 흐름의 바로 다음 단계인지 검증."""
-    flow = get_flow(d.delivery_type)
+    """상태 변경이 흐름의 바로 다음 단계인지 검증."""
     if new_status == "cancel":
         if d.status != "wait":
             raise HTTPException(status_code=400, detail="대기중 상태에서만 취소할 수 있습니다.")
         return
-    if new_status not in flow:
+    if new_status in ("weighed", "done"):
+        raise HTTPException(status_code=400, detail="완료는 계근표 사진 등록을 통해 처리됩니다.")
+    if new_status not in FLOW:
         raise HTTPException(status_code=400, detail="알 수 없는 상태값입니다.")
-    if d.status not in flow:
+    if d.status not in FLOW:
         raise HTTPException(status_code=400, detail=f"현재 상태({STATUS_LABELS.get(d.status, d.status)})에서는 변경할 수 없습니다.")
-    if flow.index(new_status) != flow.index(d.status) + 1:
+    if FLOW.index(new_status) != FLOW.index(d.status) + 1:
         raise HTTPException(
             status_code=400,
             detail=f"순서에 맞지 않는 상태 변경입니다. (현재: {STATUS_LABELS.get(d.status)}, 요청: {STATUS_LABELS.get(new_status)})",
@@ -108,7 +116,7 @@ def _validate_status_transition(d, new_status: str):
 
 
 def get_flow(delivery_type: str):
-    return OUTBOUND_FLOW if delivery_type == "출하" else INBOUND_FLOW
+    return FLOW  # 출하·입하 동일한 통합 흐름
 
 
 def _apply_visibility_filter(query, db: Session, current_user: models.User):
@@ -444,14 +452,12 @@ def update_status(
     if update.status:
         _validate_status_transition(d, update.status)
         d.status = update.status
+    if update.work_start_time:
+        d.work_start_time = update.work_start_time
     if update.loading_complete_time:
         d.loading_complete_time = update.loading_complete_time
-    if update.driving_time:
-        d.driving_time = update.driving_time
     if update.unloaded_time:
         d.unloaded_time = update.unloaded_time
-    if update.complete_time:
-        d.complete_time = update.complete_time
     if update.complete_memo is not None:
         d.complete_memo = update.complete_memo
 
@@ -508,27 +514,23 @@ def revert_status(
         db.commit()
         return {"success": True, "new_status": "wait"}
 
-    flow = get_flow(d.delivery_type)
-
-    if d.status not in flow:
+    if d.status not in FLOW:
         raise HTTPException(status_code=400, detail="되돌릴 수 없는 상태입니다.")
 
-    idx = flow.index(d.status)
+    idx = FLOW.index(d.status)
     if idx == 0:
         raise HTTPException(status_code=400, detail="이미 첫 번째 단계(대기중)입니다.")
 
-    prev_status = flow[idx - 1]
+    prev_status = FLOW[idx - 1]
+    if prev_status == "weighed":
+        # 계근표 등록은 거쳐가는 단계이므로 완료에서 되돌리면 하차로
+        prev_status = "unloaded"
     d.status = prev_status
 
-    # 되돌린 지점보다 뒤 단계의 시간 기록만 초기화 (출하/입하 흐름 각각 기준)
-    status_time_fields = {
-        "loaded": "loading_complete_time",
-        "driving": "driving_time",
-        "unloaded": "unloaded_time",
-        "done": "complete_time",
-    }
-    for later_status in flow[idx:]:
-        field = status_time_fields.get(later_status)
+    # 되돌린 지점보다 뒤 단계의 시간 기록만 초기화
+    new_idx = FLOW.index(prev_status)
+    for later_status in FLOW[new_idx + 1:]:
+        field = STATUS_TIME_FIELDS.get(later_status)
         if field:
             setattr(d, field, None)
         if later_status == "done":
@@ -552,12 +554,11 @@ async def upload_photos(
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
 
-    # 완료 직전 단계(출하: 하차완료, 입하: 상차완료)에서만 계근표 등록 가능
-    flow = get_flow(d.delivery_type)
-    if d.status != flow[-2]:
+    # 하차 상태에서만 계근표 등록 가능 (등록 시 계근표등록→완료로 자동 전환)
+    if d.status != "unloaded":
         raise HTTPException(
             status_code=400,
-            detail=f"{STATUS_LABELS.get(flow[-2])} 상태에서만 계근표를 등록할 수 있습니다. (현재: {STATUS_LABELS.get(d.status, d.status)})",
+            detail=f"하차 상태에서만 계근표를 등록할 수 있습니다. (현재: {STATUS_LABELS.get(d.status, d.status)})",
         )
 
     for file in files:
@@ -581,8 +582,11 @@ async def upload_photos(
                 filename=fname,
             ))
 
+    # 계근표 등록 시각 기록 후 완료로 자동 전환
+    now_hm = datetime.now(KST).strftime("%H:%M")
     d.status = "done"
-    d.complete_time = datetime.now(KST).strftime("%H:%M")
+    d.weighed_time = now_hm
+    d.complete_time = now_hm
     d.complete_memo = complete_memo
     d.updated_at = datetime.utcnow()
     db.commit()

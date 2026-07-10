@@ -32,6 +32,8 @@ migrations = [
     ("deliveries", "driving_time",  "VARCHAR(5)"),
     ("deliveries", "unloaded_time", "VARCHAR(5)"),
     ("deliveries", "is_deleted",    "BOOLEAN DEFAULT FALSE"),
+    ("deliveries", "work_start_time", "VARCHAR(5)"),
+    ("deliveries", "weighed_time",  "VARCHAR(5)"),
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
 ]
@@ -50,6 +52,18 @@ with engine.connect() as conn:
         except Exception:
             conn.rollback()
 print("✅ 마이그레이션 완료")
+
+# ── 배송 단계 개편: 구 상태값(driving) → 새 통합 흐름으로 변환 (1회성, 멱등) ──
+with engine.connect() as conn:
+    try:
+        # 출하의 운행중(상차 후)은 '상차'로, 입하의 운행중(상차 전)은 '업무시작'으로
+        conn.execute(text("UPDATE deliveries SET status='loaded' WHERE status='driving' AND delivery_type='출하'"))
+        conn.execute(text("UPDATE deliveries SET status='start' WHERE status='driving' AND delivery_type!='출하'"))
+        conn.commit()
+        print("✅ 배송 단계 상태값 변환 완료")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ 상태값 변환 건너뜀: {e}")
 
 db = SessionLocal()
 
