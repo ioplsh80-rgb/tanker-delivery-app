@@ -38,6 +38,12 @@ async def root():
     return FileResponse("static/index.html")
 
 
+@app.get("/sw.js")
+async def service_worker():
+    # 루트 경로에서 제공해야 서비스 워커의 범위가 사이트 전체가 됨
+    return FileResponse("static/sw.js", media_type="application/javascript")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}

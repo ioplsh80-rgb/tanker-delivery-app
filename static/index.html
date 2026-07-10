@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>탱크로리 배송 관리</title>
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#1e3a5f">
+<link rel="icon" type="image/png" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="배송관리">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
@@ -70,6 +77,13 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .viewer-details[open] summary::after { transform:rotate(90deg); }
 .viewer-details .viewer-body { padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px; }
 .viewer-count { color:#2563eb;font-size:12px;font-weight:500; }
+/* PWA 설치 안내 배너 */
+.install-banner { position:fixed;left:12px;right:12px;bottom:12px;z-index:900;background:#1e3a5f;color:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px; }
+.install-banner img { width:42px;height:42px;border-radius:10px;flex-shrink:0; }
+.install-banner .ib-text { flex:1;font-size:13px;line-height:1.5; }
+.install-banner .ib-text b { font-size:14px; }
+.install-banner button.ib-install { background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;flex-shrink:0; }
+.install-banner button.ib-close { background:transparent;color:#cadcfc;border:none;font-size:16px;cursor:pointer;flex-shrink:0;padding:4px; }
 
 /* 기사 카드 미니 스텝바 */
 .mini-steps { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
@@ -1012,6 +1026,14 @@ header h2 { font-size: 16px; font-weight: 700; }
 </div>
 
 <div id="toast"></div>
+
+<!-- ══ PWA 설치 안내 배너 ══ -->
+<div id="installBanner" class="install-banner hidden">
+  <img src="/static/icon-192.png" alt="앱 아이콘">
+  <div class="ib-text" id="installBannerText"><b>앱으로 설치하기</b></div>
+  <button class="ib-install hidden" id="installBannerBtn" onclick="triggerInstall()">설치</button>
+  <button class="ib-close" onclick="dismissInstallBanner()">✕</button>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════
@@ -2802,6 +2824,63 @@ function refreshCurrentTab() {
   else if (currentTab === 'drivers')      loadDriverStatus();
   else if (currentTab === 'myDeliveries') loadMyDeliveries();
   else if (currentTab === 'myHistory')    loadMyHistory();
+}
+
+// ═══════════════════════════════════════════════════
+// PWA: 서비스 워커 등록 + 설치 안내 배너
+// ═══════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+let deferredInstallPrompt = null;
+
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  if (isStandalone()) return;
+  if (localStorage.getItem('installBannerDismissed')) return;
+  const banner = document.getElementById('installBanner');
+  const text = document.getElementById('installBannerText');
+  const btn = document.getElementById('installBannerBtn');
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (deferredInstallPrompt) {
+    text.innerHTML = '<b>앱으로 설치하기</b><br>홈 화면에 설치하면 앱처럼 사용할 수 있습니다.';
+    btn.classList.remove('hidden');
+  } else if (isIOS) {
+    text.innerHTML = '<b>앱으로 설치하기</b><br>사파리 공유(⬆️) 버튼 → "홈 화면에 추가"를 눌러주세요.';
+    btn.classList.add('hidden');
+  } else {
+    text.innerHTML = '<b>앱으로 설치하기</b><br>브라우저 메뉴(⋮) → "홈 화면에 추가"를 눌러주세요.';
+    btn.classList.add('hidden');
+  }
+  banner.classList.remove('hidden');
+}
+
+async function triggerInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('installBanner').classList.add('hidden');
+}
+
+function dismissInstallBanner() {
+  localStorage.setItem('installBannerDismissed', '1');
+  document.getElementById('installBanner').classList.add('hidden');
+}
+
+// 모바일에서 미설치 상태로 접속하면 설치 안내 표시 (PC 제외)
+if (/android|iphone|ipad|ipod/i.test(navigator.userAgent) && !isStandalone()) {
+  setTimeout(showInstallBanner, 1500);
 }
 
 // 모달 바깥 클릭 시 닫기

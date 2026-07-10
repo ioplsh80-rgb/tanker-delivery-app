@@ -1,0 +1,17 @@
+{
+  "name": "탱크로리 배송관리",
+  "short_name": "배송관리",
+  "description": "탱크로리 배송의 배차·운행·계근·소통을 하나로 관리",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1e3a5f",
+  "background_color": "#ffffff",
+  "lang": "ko",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
