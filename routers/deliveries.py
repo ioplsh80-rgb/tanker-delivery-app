@@ -362,6 +362,18 @@ async def send_photo_message(
 
 
 # ── 유의사항 확인(동의) 기록 ──────────────────────────
+@router.get("/my-notice-acks")
+def my_notice_acks(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """내가 유의사항에 동의한 배송카드 ID 목록 (기사 목록 화면의 정보 가림 판정용)"""
+    rows = db.query(models.DeliveryNoticeAck.delivery_id).filter(
+        models.DeliveryNoticeAck.user_id == current_user.id).all()
+    return [r[0] for r in rows]
+
+
+
 @router.get("/{delivery_id}/notice-ack")
 def get_notice_acks(
     delivery_id: int,

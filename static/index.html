@@ -1725,7 +1725,7 @@ async function loadMyDeliveries() {
   document.getElementById('myDeliveryList').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const list = await api('GET', '/deliveries/');
-    await loadUnreadCounts();
+    await Promise.all([loadUnreadCounts(), loadMyAcks()]);
     const active = list.filter(d => d.status !== 'done' && d.status !== 'cancel');
     document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('미완료 배송이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
@@ -1767,7 +1767,7 @@ async function loadMyHistory() {
       dateTo   = `${year}-12-31`;
     }
     const all = await api('GET', `/deliveries/?date_from=${dateFrom}&date_to=${dateTo}`);
-    await loadUnreadCounts();
+    await Promise.all([loadUnreadCounts(), loadMyAcks()]);
     const list = all.filter(d => d.status === 'done');
     document.getElementById('myHistoryList').innerHTML = renderDeliveryCards(list, 'driverHistory') || emptyMsg('배송 기록이 없습니다.');
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
@@ -1782,9 +1782,42 @@ function renderDeliveryCards(list, mode) {
   return list.map(d => deliveryCardHTML(d, mode)).join('');
 }
 
+// 기사 목록에서 유의사항 미동의 카드는 세부 정보를 가림 (동의 후 표시)
+let myAckedIds = new Set();
+
+async function loadMyAcks() {
+  try { myAckedIds = new Set(await api('GET', '/deliveries/my-notice-acks') || []); }
+  catch (e) { myAckedIds = new Set(); }
+}
+
+function needsAckMask(d) {
+  if (d.status === 'done' || d.status === 'cancel') return false;
+  const company = companiesList.find(c => c.name === d.company);
+  const hasNotices = company && company.notices && company.notices.length > 0;
+  return hasNotices && !myAckedIds.has(d.id);
+}
+
 function deliveryCardHTML(d, mode) {
   const driverName = d.driver_user ? d.driver_user.name : '-';
   const isDriverMode = (mode === 'driver' || mode === 'driverHistory');
+
+  // 기사: 유의사항 동의 전에는 일시·상태만 보이고 세부 정보 가림
+  if (isDriverMode && currentUser && currentUser.role === 'driver' && needsAckMask(d)) {
+    return `
+  <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
+    <div class="card-header">
+      <div>
+        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}</div>
+        <div class="card-company">🔒 새 배차가 등록되었습니다</div>
+      </div>
+      <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
+    </div>
+    <div style="font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;">
+      ⚠️ 카드를 눌러 <b>유의사항을 확인</b>하면 배송 정보가 표시됩니다.
+    </div>
+  </div>`;
+  }
+
   const actions = isDriverMode ? '' : buildCardActions(d, mode);
   const statusArea = isDriverMode
     ? driverStatusSteps(d)
@@ -2038,7 +2071,9 @@ async function submitNoticeAck() {
     const id = ackDeliveryId;
     document.getElementById('noticeAckModal').classList.add('hidden');
     ackDeliveryId = null;
+    myAckedIds.add(id);   // 목록의 정보 가림 즉시 해제
     showToast('✅ 유의사항 확인이 기록되었습니다.');
+    refreshCurrentTab();
     openDetail(id);
   } catch (e) { showToast('⚠️ ' + e.message); }
 }
