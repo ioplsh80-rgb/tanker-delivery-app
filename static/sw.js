@@ -14,3 +14,34 @@ self.addEventListener("fetch", (event) => {
   // 캐시 없이 항상 네트워크 사용 (업무 데이터 실시간성 유지)
   event.respondWith(fetch(event.request));
 });
+
+// ── 푸시 알림 수신 ──
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+  const title = data.title || "배송관리 알림";
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || "",
+    icon: "/static/icon-192.png",
+    badge: "/static/icon-192.png",
+    data: { url: data.url || "/" },
+  }));
+});
+
+// 알림 클릭 → 앱 열기 (해당 배송카드로 이동)
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const win of wins) {
+        if ("focus" in win) {
+          win.focus();
+          if ("navigate" in win) win.navigate(url);
+          return;
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});

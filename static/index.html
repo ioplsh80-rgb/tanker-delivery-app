@@ -275,6 +275,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     </div>
     <div class="header-right">
       <span class="header-user" id="headerUser"></span>
+      <button class="logout-btn hidden" id="btnEnablePush" onclick="enablePush()">🔔 알림 켜기</button>
       <button class="logout-btn" onclick="openMyPasswordModal()">🔑 비밀번호</button>
       <button class="logout-btn" onclick="doLogout()">로그아웃</button>
     </div>
@@ -1197,6 +1198,15 @@ async function initApp() {
     currentTab = 'myDeliveries';
     await loadCompanies();   // 유의사항 표시에 필요
     await loadMyDeliveries();
+  }
+
+  initPush();   // 알림 권한 상태에 따라 자동 구독 또는 '알림 켜기' 버튼 표시
+
+  // 푸시 알림 클릭으로 진입한 경우 해당 배송카드 열기 (/?open=ID)
+  const openId = new URLSearchParams(location.search).get('open');
+  if (openId) {
+    history.replaceState(null, '', '/');
+    openDetail(parseInt(openId));
   }
 }
 
@@ -2881,6 +2891,56 @@ function dismissInstallBanner() {
 // 모바일에서 미설치 상태로 접속하면 설치 안내 표시 (PC 제외)
 if (/android|iphone|ipad|ipod/i.test(navigator.userAgent) && !isStandalone()) {
   setTimeout(showInstallBanner, 1500);
+}
+
+// ═══════════════════════════════════════════════════
+// 푸시 알림 구독
+// ═══════════════════════════════════════════════════
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function subscribePush() {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    const { key } = await api('GET', '/push/public-key');
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+  }
+  await api('POST', '/push/subscribe', { subscription: sub.toJSON() });
+}
+
+async function enablePush() {
+  if (!pushSupported()) { showToast('⚠️ 이 브라우저는 알림을 지원하지 않습니다.'); return; }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { showToast('⚠️ 알림 권한이 거부되었습니다.'); return; }
+    await subscribePush();
+    document.getElementById('btnEnablePush').classList.add('hidden');
+    showToast('🔔 알림이 켜졌습니다.');
+  } catch (e) { showToast('⚠️ 알림 설정 실패'); }
+}
+
+// 로그인 후 호출: 권한 상태에 따라 자동 구독 또는 버튼 표시
+async function initPush() {
+  if (!pushSupported()) return;
+  const btn = document.getElementById('btnEnablePush');
+  if (Notification.permission === 'granted') {
+    try { await subscribePush(); } catch (e) {}
+    btn.classList.add('hidden');
+  } else if (Notification.permission === 'default') {
+    btn.classList.remove('hidden');
+  }
 }
 
 // 모달 바깥 클릭 시 닫기

@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import models
 from database import engine
-from routers import auth, deliveries, users, exports, items, companies, photos
+from routers import auth, deliveries, users, exports, items, companies, photos, push
 
 # DB 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -28,6 +28,7 @@ app.include_router(exports.router,    prefix="/api/exports",   tags=["내보내�
 app.include_router(items.router,      prefix="/api/items",     tags=["품목"])
 app.include_router(companies.router,  prefix="/api/companies", tags=["고객사"])
 app.include_router(photos.router,     prefix="/api/photos",    tags=["사진"])
+app.include_router(push.router,       prefix="/api/push",      tags=["알림"])
 
 # 정적 파일 (프론트엔드)
 app.mount("/static", StaticFiles(directory="static"), name="static")

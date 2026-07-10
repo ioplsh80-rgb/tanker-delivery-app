@@ -103,6 +103,7 @@ class Delivery(Base):
     driving_time = Column(String(5))           # (구버전) 운행 시작 - 과거 데이터 보존용
 
     created_by = Column(Integer, ForeignKey("users.id"))
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # 배차한 관리자
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -172,6 +173,17 @@ class DeliveryNoticeAck(Base):
     notices_snapshot = Column(Text)   # 동의 시점의 유의사항 전문 (JSON) - 증빙용
 
     user = relationship("User")
+
+
+class PushSubscription(Base):
+    """푸시 알림 수신 기기 등록 (사용자당 여러 기기 가능)"""
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False)          # 브라우저 푸시 서비스 주소 (기기 식별)
+    subscription_json = Column(Text, nullable=False) # 구독 정보 전체 (JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class DeliveryPhoto(Base):

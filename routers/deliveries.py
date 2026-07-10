@@ -7,7 +7,7 @@ from typing import List, Optional
 
 KST = timezone(timedelta(hours=9))
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -155,6 +155,14 @@ def _require_view(d: models.Delivery, db: Session, current_user: models.User):
         raise HTTPException(status_code=404, detail="삭제된 배송카드입니다.")
     if not _can_view_delivery(d, db, current_user):
         raise HTTPException(status_code=403, detail="이 배송카드에 접근할 권한이 없습니다.")
+
+
+def _notify_targets(d: models.Delivery, exclude_user_id: int):
+    """알림 수신자: 카드 생성 관리자 + 배차한 관리자 + 담당 기사 (행위자 제외)"""
+    targets = {d.created_by, d.assigned_by, d.driver_id}
+    targets.discard(None)
+    targets.discard(exclude_user_id)
+    return list(targets)
 
 
 @router.get("/", response_model=List[schemas.DeliveryResponse])
@@ -320,10 +328,11 @@ def get_messages(
 def send_message(
     delivery_id: int,
     body: schemas.MessageCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    _get_delivery_for_chat(delivery_id, db, current_user)
+    d = _get_delivery_for_chat(delivery_id, db, current_user)
     content = (body.content or "").strip()
     if not content:
         raise HTTPException(status_code=400, detail="메시지 내용을 입력해주세요.")
@@ -332,18 +341,27 @@ def send_message(
     _mark_read(delivery_id, db, current_user)
     db.commit()
     db.refresh(m)
+    from routers.push import send_push_to_users
+    preview = content if len(content) <= 40 else content[:40] + "…"
+    background_tasks.add_task(
+        send_push_to_users, _notify_targets(d, current_user.id),
+        f"💬 {current_user.name}: 새 메시지",
+        f"D{d.id:03d} — {preview}",
+        f"/?open={d.id}",
+    )
     return _message_response(m)
 
 
 @router.post("/{delivery_id}/messages/photo", response_model=schemas.MessageResponse)
 async def send_photo_message(
     delivery_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     content: str = Form(""),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    _get_delivery_for_chat(delivery_id, db, current_user)
+    d = _get_delivery_for_chat(delivery_id, db, current_user)
     contents = await file.read()
     mime = file.content_type or "image/jpeg"
     fname = f"chat_D{delivery_id}_{file.filename or 'photo.jpg'}"
@@ -358,6 +376,13 @@ async def send_photo_message(
     _mark_read(delivery_id, db, current_user)
     db.commit()
     db.refresh(m)
+    from routers.push import send_push_to_users
+    background_tasks.add_task(
+        send_push_to_users, _notify_targets(d, current_user.id),
+        f"💬 {current_user.name}: 사진을 보냈습니다",
+        f"D{d.id:03d} 배송카드 대화",
+        f"/?open={d.id}",
+    )
     return _message_response(m)
 
 
@@ -482,6 +507,7 @@ def update_status(
 def assign_vehicle(
     delivery_id: int,
     assign: schemas.DeliveryAssign,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -493,6 +519,7 @@ def assign_vehicle(
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
     d.driver_id = assign.driver_id
+    d.assigned_by = current_user.id
     if assign.vehicle_number:
         d.vehicle_number = assign.vehicle_number
     else:
@@ -501,6 +528,14 @@ def assign_vehicle(
             d.vehicle_number = driver.vehicle_number
     d.updated_at = datetime.utcnow()
     db.commit()
+    # 담당 기사에게 배차 알림
+    from routers.push import send_push_to_users
+    background_tasks.add_task(
+        send_push_to_users, [d.driver_id],
+        "🚛 새 배차가 등록되었습니다",
+        f"D{d.id:03d} · {d.scheduled_date} {d.delivery_time or ''} — 카드를 열어 확인해주세요.",
+        f"/?open={d.id}",
+    )
     return {"success": True}
 
 
@@ -556,6 +591,7 @@ def revert_status(
 @router.post("/{delivery_id}/photos")
 async def upload_photos(
     delivery_id: int,
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     complete_memo: str = Form(""),
     db: Session = Depends(get_db),
@@ -602,6 +638,14 @@ async def upload_photos(
     d.complete_memo = complete_memo
     d.updated_at = datetime.utcnow()
     db.commit()
+    # 관리자(생성자·배차자)에게 계근표 등록 알림
+    from routers.push import send_push_to_users
+    background_tasks.add_task(
+        send_push_to_users, _notify_targets(d, current_user.id),
+        "📄 계근표 등록 완료",
+        f"D{d.id:03d} {d.company} — {current_user.name}님이 계근표를 등록했습니다.",
+        f"/?open={d.id}",
+    )
     return {"success": True, "photos_uploaded": len(files)}
 
 

@@ -34,6 +34,7 @@ migrations = [
     ("deliveries", "is_deleted",    "BOOLEAN DEFAULT FALSE"),
     ("deliveries", "work_start_time", "VARCHAR(5)"),
     ("deliveries", "weighed_time",  "VARCHAR(5)"),
+    ("deliveries", "assigned_by",   "INTEGER"),
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
 ]
