@@ -1997,6 +1997,10 @@ async function openDetail(id) {
   document.getElementById('detailModal').classList.remove('hidden');
   try {
     const d = await api('GET', `/deliveries/${id}`);
+    // 주의사항 표시에 필요한 고객사 목록이 없으면 다시 로딩 (안전장치)
+    if (!companiesList || companiesList.length === 0) {
+      try { await loadCompanies(); } catch (e) {}
+    }
     // 기사는 유의사항 확인(동의) 후에만 카드를 열 수 있음 (배송 건당 1회)
     if (currentUser.role === 'driver') {
       const company = companiesList.find(c => c.name === d.company);
@@ -2129,25 +2133,27 @@ function renderDetail(d) {
       }).join('')}</div>`
     : '<p style="font-size:13px;color:#9ca3af;">첨부된 사진 없음</p>';
 
-  // 주의사항 배너
+  // 주의사항 - 접이식 표시 (클릭하면 펼쳐짐)
   const matchedCompany = companiesList.find(c => c.name === d.company);
   const notices = matchedCompany && matchedCompany.notices && matchedCompany.notices.length > 0
     ? matchedCompany.notices : [];
   const noticeBannerHTML = notices.length > 0 ? `
-    <div class="notice-warning-banner">
-      <div class="notice-warning-title">⚠️ 주의사항 (${notices.length}건)</div>
-      ${notices.map((n, i) => {
-        const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
-        return `<div class="notice-warning-item">
-          <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
-          <div>
-            <div>${escapeHtml(n.content)}</div>
-            ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('/api/photos/${n.drive_file_id}', '${n.drive_file_id}')">` : ''}
-          </div>
-        </div>`;
-      }).join('')}
-      <div id="ack-status-line" style="margin-top:8px;font-size:12px;font-weight:600;"></div>
-    </div>` : '';
+    <details class="viewer-details" style="border-color:#fde68a;background:#fffbeb;margin-bottom:14px;">
+      <summary style="color:#92400e;">⚠️ 주의사항 ${notices.length}건 <span style="font-size:12px;font-weight:400;color:#b45309;">— 눌러서 확인</span></summary>
+      <div class="viewer-body">
+        <div id="ack-status-line" style="font-size:12px;font-weight:600;"></div>
+        ${notices.map((n, i) => {
+          const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+          return `<div class="notice-warning-item">
+            <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
+            <div>
+              <div>${escapeHtml(n.content)}</div>
+              ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('/api/photos/${n.drive_file_id}', '${n.drive_file_id}')">` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </details>` : '';
 
   document.getElementById('detailBody').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -2158,6 +2164,8 @@ function renderDetail(d) {
       <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
     </div>
     <div class="status-flow">${stepsHTML}</div>
+
+    ${noticeBannerHTML}
 
     <div class="detail-section">
       <h4>배송 정보</h4>
@@ -2218,8 +2226,6 @@ function renderDetail(d) {
         </div>
       </div>
     </div>
-
-    ${noticeBannerHTML}
   `;
 
   startChat(d.id);
