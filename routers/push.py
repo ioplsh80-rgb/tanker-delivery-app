@@ -9,6 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
@@ -70,9 +71,40 @@ def unsubscribe(
     return {"success": True}
 
 
+def _unread_message_count(db: Session, user_id: int) -> int:
+    """앱 아이콘 뱃지용: 이 사용자의 안 읽은 대화 메시지 총 개수."""
+    ids = [r[0] for r in db.query(models.Delivery.id).filter(
+        models.Delivery.is_deleted.is_not(True),
+        or_(
+            models.Delivery.driver_id == user_id,
+            models.Delivery.created_by == user_id,
+            models.Delivery.assigned_by == user_id,
+        ),
+    ).all()]
+    if not ids:
+        return 0
+    reads = {
+        r.delivery_id: r.last_read_at
+        for r in db.query(models.DeliveryMessageRead).filter(
+            models.DeliveryMessageRead.user_id == user_id,
+            models.DeliveryMessageRead.delivery_id.in_(ids),
+        ).all()
+    }
+    msgs = db.query(models.DeliveryMessage).filter(
+        models.DeliveryMessage.delivery_id.in_(ids),
+        models.DeliveryMessage.user_id != user_id,
+    ).all()
+    count = 0
+    for m in msgs:
+        last_read = reads.get(m.delivery_id)
+        if last_read is None or m.created_at > last_read:
+            count += 1
+    return count
+
+
 def send_push_to_users(user_ids, title: str, message: str, url: str = "/"):
     """대상 사용자들의 모든 기기로 푸시 발송 (백그라운드 작업용).
-    실패한(만료된) 구독은 자동 정리한다."""
+    수신자별 안 읽은 개수를 뱃지 숫자로 포함. 만료된 구독은 자동 정리."""
     private_key = os.getenv("VAPID_PRIVATE_KEY")
     if not private_key or not user_ids:
         return
@@ -81,25 +113,33 @@ def send_push_to_users(user_ids, title: str, message: str, url: str = "/"):
     except ImportError:
         return
 
-    payload = json.dumps({"title": title, "body": message, "url": url}, ensure_ascii=False)
     db = SessionLocal()
     try:
-        subs = db.query(models.PushSubscription).filter(
-            models.PushSubscription.user_id.in_(list(set(user_ids)))).all()
-        for sub in subs:
-            try:
-                webpush(
-                    subscription_info=json.loads(sub.subscription_json),
-                    data=payload,
-                    vapid_private_key=private_key,
-                    vapid_claims=dict(VAPID_CLAIMS),
-                )
-            except WebPushException as e:
-                status = getattr(getattr(e, "response", None), "status_code", None)
-                if status in (404, 410):   # 만료된 기기 등록 제거
-                    db.delete(sub)
-            except Exception:
-                pass
+        for uid in set(user_ids):
+            if uid is None:
+                continue
+            subs = db.query(models.PushSubscription).filter(
+                models.PushSubscription.user_id == uid).all()
+            if not subs:
+                continue
+            badge = min(_unread_message_count(db, uid) or 1, 99)  # 최소 1 (확인할 알림 존재)
+            payload = json.dumps(
+                {"title": title, "body": message, "url": url, "badge": badge},
+                ensure_ascii=False)
+            for sub in subs:
+                try:
+                    webpush(
+                        subscription_info=json.loads(sub.subscription_json),
+                        data=payload,
+                        vapid_private_key=private_key,
+                        vapid_claims=dict(VAPID_CLAIMS),
+                    )
+                except WebPushException as e:
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    if status in (404, 410):   # 만료된 기기 등록 제거
+                        db.delete(sub)
+                except Exception:
+                    pass
         db.commit()
     finally:
         db.close()

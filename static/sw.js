@@ -20,12 +20,19 @@ self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) {}
   const title = data.title || "배송관리 알림";
-  event.waitUntil(self.registration.showNotification(title, {
-    body: data.body || "",
-    icon: "/static/icon-192.png",
-    badge: "/static/icon-192.png",
-    data: { url: data.url || "/" },
-  }));
+  const tasks = [
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      icon: "/static/icon-192.png",
+      badge: "/static/icon-192.png",
+      data: { url: data.url || "/" },
+    }),
+  ];
+  // 앱 아이콘에 숫자 뱃지 표시 (지원 기기: 설치된 iOS 웹앱 등)
+  if (data.badge && "setAppBadge" in navigator) {
+    tasks.push(navigator.setAppBadge(data.badge).catch(() => {}));
+  }
+  event.waitUntil(Promise.all(tasks));
 });
 
 // 알림 클릭 → 앱 열기 (해당 배송카드로 이동)

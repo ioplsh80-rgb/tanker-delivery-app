@@ -2902,6 +2902,17 @@ if (/android|iphone|ipad|ipod/i.test(navigator.userAgent) && !isStandalone()) {
 }
 
 // ═══════════════════════════════════════════════════
+// 앱 아이콘 뱃지: 앱을 열면(화면에 보이면) 지움
+// ═══════════════════════════════════════════════════
+function clearAppBadge() {
+  if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
+}
+clearAppBadge();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') clearAppBadge();
+});
+
+// ═══════════════════════════════════════════════════
 // 푸시 알림 구독
 // ═══════════════════════════════════════════════════
 function pushSupported() {
