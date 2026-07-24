@@ -190,7 +190,11 @@ def get_deliveries(
         query = query.filter(models.Delivery.scheduled_date <= date_to)
 
     return (
-        query.order_by(models.Delivery.scheduled_date.desc(), models.Delivery.delivery_time)
+        query.order_by(
+            models.Delivery.driver_id.isnot(None),      # 배차 미등록 카드를 최상단에
+            models.Delivery.scheduled_date.desc(),      # 그 다음 최신 날짜순
+            models.Delivery.delivery_time,              # 같은 날짜는 이른 시간순
+        )
         .all()
     )
 
