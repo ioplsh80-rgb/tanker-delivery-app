@@ -48,7 +48,8 @@ body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c;
 .notice-item { background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px; }
 .notice-item-row { display:flex;gap:8px;align-items:center; }
 .notice-num { font-weight:700;color:#92400e;min-width:22px;font-size:13px; }
-.notice-input { flex:1;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:13px;background:#fff; }
+.notice-input { flex:1;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:13px;background:#fff;font-family:inherit;line-height:1.5;resize:vertical; }
+.notice-item-row { align-items:flex-start; }
 .notice-photo-preview { height:56px;border-radius:4px;cursor:pointer;object-fit:cover; }
 .notice-warning-banner { background:#fffbeb;border-left:4px solid #f59e0b;border-radius:6px;padding:12px 14px;margin-bottom:12px; }
 .notice-warning-title { font-weight:700;color:#92400e;font-size:13px;margin-bottom:8px; }
@@ -1539,7 +1540,7 @@ function renderNoticeList(notices, companyId) {
     html += '<div class="notice-item" id="notice-item-' + n.id + '">'
       + '<div class="notice-item-row">'
       + '<span class="notice-num">' + num + '</span>'
-      + '<input class="notice-input" id="notice-text-' + n.id + '" value="' + safeContent + '" onblur="saveNoticeContent(' + n.id + ',' + companyId + ')">'
+      + '<textarea class="notice-input" rows="2" id="notice-text-' + n.id + '" onblur="saveNoticeContent(' + n.id + ',' + companyId + ')">' + safeContent + '</textarea>'
       + '<label class="btn btn-sm btn-outline" style="cursor:pointer;padding:4px 8px;" title="사진 첨부">'
       + '📎<input type="file" accept="image/*" style="display:none" onchange="uploadNoticePhoto(this,' + n.id + ',' + companyId + ')">'
       + '</label>'
@@ -1562,7 +1563,7 @@ function addNoticeRow() {
   tmp.innerHTML = `
     <div class="notice-item-row">
       <span class="notice-num">✏️</span>
-      <input class="notice-input" id="notice-new-text" placeholder="주의사항 내용을 입력하세요">
+      <textarea class="notice-input" rows="2" id="notice-new-text" placeholder="주의사항 내용을 입력하세요 (여러 줄 가능)"></textarea>
       <button class="btn btn-sm btn-primary" onclick="saveNewNotice(${companyId})">저장</button>
       <button class="btn btn-sm btn-gray" onclick="document.getElementById('notice-new-row').remove()">취소</button>
     </div>`;
@@ -2071,7 +2072,7 @@ function renderAckStep() {
       </div>
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;">
         <div style="font-weight:700;color:#92400e;margin-bottom:10px;">유의사항 ${ackIdx + 1} / ${total}</div>
-        <div style="font-size:15px;line-height:1.7;color:#1f2937;">${escapeHtml(n.content)}</div>
+        <div style="font-size:15px;line-height:1.7;color:#1f2937;white-space:pre-line;">${escapeHtml(n.content)}</div>
         ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:12px;max-width:100%;border-radius:8px;">` : ''}
       </div>`;
     footer.innerHTML = `
@@ -2147,7 +2148,7 @@ function renderDetail(d) {
           return `<div class="notice-warning-item">
             <span style="min-width:20px;font-weight:700;color:#92400e;">${nums[i]||i+1}</span>
             <div>
-              <div>${escapeHtml(n.content)}</div>
+              <div style="white-space:pre-line;">${escapeHtml(n.content)}</div>
               ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:6px;max-width:100%;border-radius:4px;cursor:pointer;" onclick="viewPhoto('/api/photos/${n.drive_file_id}', '${n.drive_file_id}')">` : ''}
             </div>
           </div>`;
