@@ -61,19 +61,45 @@ def test_push(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """본인 기기로 테스트 알림 발송 + 진단 정보 반환"""
-    devices = db.query(models.PushSubscription).filter(
-        models.PushSubscription.user_id == current_user.id).count()
-    vapid_ok = bool(os.getenv("VAPID_PRIVATE_KEY"))
+    """본인 기기로 테스트 알림을 즉시 발송하고 기기별 상세 결과 반환 (진단용)"""
+    subs = db.query(models.PushSubscription).filter(
+        models.PushSubscription.user_id == current_user.id).all()
+    private_key = os.getenv("VAPID_PRIVATE_KEY")
+    vapid_ok = bool(private_key)
     try:
-        from pywebpush import webpush  # noqa: F401
+        from pywebpush import webpush, WebPushException
         lib_ok = True
     except ImportError:
         lib_ok = False
-    if devices and vapid_ok and lib_ok:
-        send_push_to_users([current_user.id], "🔔 테스트 알림",
-                           f"{current_user.name}님, 알림이 정상 작동합니다!", "/")
-    return {"devices": devices, "vapid_configured": vapid_ok, "library_ok": lib_ok}
+
+    results = []
+    if subs and vapid_ok and lib_ok:
+        payload = json.dumps({
+            "title": "🔔 테스트 알림",
+            "body": f"{current_user.name}님, 알림이 정상 작동합니다!",
+            "url": "/", "badge": 1,
+        }, ensure_ascii=False)
+        for sub in subs:
+            try:
+                webpush(
+                    subscription_info=json.loads(sub.subscription_json),
+                    data=payload,
+                    vapid_private_key=private_key,
+                    vapid_claims=dict(VAPID_CLAIMS),
+                )
+                results.append("성공")
+            except WebPushException as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                body = ""
+                try:
+                    body = e.response.text[:150] if e.response is not None else ""
+                except Exception:
+                    pass
+                results.append(f"실패({status}): {body or str(e)[:150]}")
+            except Exception as e:
+                results.append(f"오류({type(e).__name__}): {str(e)[:150]}")
+    return {"devices": len(subs), "vapid_configured": vapid_ok,
+            "library_ok": lib_ok, "results": results}
 
 
 @router.post("/unsubscribe")

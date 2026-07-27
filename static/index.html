@@ -2946,12 +2946,17 @@ async function enablePush() {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { showToast('⚠️ 알림 권한이 거부되었습니다. 휴대폰 설정에서 허용해주세요.'); return; }
     await subscribePush();
-    // 진단 겸 테스트 알림 발송
+    // 진단 겸 테스트 알림 발송 (기기별 상세 결과 표시)
     const r = await api('POST', '/push/test');
     if (!r.vapid_configured) { showToast('⚠️ 서버 알림 키(VAPID)가 설정되지 않았습니다.'); return; }
     if (!r.library_ok) { showToast('⚠️ 서버 알림 모듈이 설치되지 않았습니다.'); return; }
     if (r.devices === 0) { showToast('⚠️ 기기 등록이 저장되지 않았습니다.'); return; }
-    showToast(`🔔 테스트 알림을 보냈습니다 (등록 기기 ${r.devices}대). 잠시 후 알림을 확인하세요.`);
+    const fails = (r.results || []).filter(x => x !== '성공');
+    if (fails.length) {
+      alert('알림 발송 결과:\n' + r.results.join('\n'));
+    } else {
+      showToast(`🔔 테스트 알림 발송 성공 (기기 ${r.devices}대). 잠시 후 알림을 확인하세요.`);
+    }
     document.getElementById('btnEnablePush').textContent = '🔔 알림 테스트';
   } catch (e) { showToast('⚠️ 알림 설정 실패: ' + (e.message || '')); }
 }
