@@ -2230,6 +2230,7 @@ function renderDetail(d) {
   `;
 
   startChat(d.id);
+  closeNotificationsFor(d.id);   // 이 카드의 알림을 확인 처리 → 뱃지 감소
   if (document.getElementById('detail-viewers'))
     renderViewerChecklist('detail-viewers', d.viewer_ids || []);
   if (notices.length > 0) loadAckStatus(d);
@@ -2903,14 +2904,38 @@ if (/android|iphone|ipad|ipod/i.test(navigator.userAgent) && !isStandalone()) {
 }
 
 // ═══════════════════════════════════════════════════
-// 앱 아이콘 뱃지: 앱을 열면(화면에 보이면) 지움
+// 앱 아이콘 뱃지 = 아직 확인하지 않은 알림 수
+// 앱만 열어서는 사라지지 않고, 해당 배송카드를 열어야 그 알림이 사라짐
 // ═══════════════════════════════════════════════════
-function clearAppBadge() {
-  if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
+async function refreshBadge() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const n = (await reg.getNotifications()).length;
+    if (n > 0) {
+      if ('setAppBadge' in navigator) await navigator.setAppBadge(Math.min(n, 99));
+    } else if ('clearAppBadge' in navigator) {
+      await navigator.clearAppBadge();
+    }
+  } catch (e) {}
 }
-clearAppBadge();
+
+// 해당 배송카드의 알림 닫기 (= 내용을 확인함)
+async function closeNotificationsFor(deliveryId) {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const notes = await reg.getNotifications();
+    notes.forEach(n => {
+      if (n.data && n.data.deliveryId == deliveryId) n.close();
+    });
+    await refreshBadge();
+  } catch (e) {}
+}
+
+refreshBadge();
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') clearAppBadge();
+  if (document.visibilityState === 'visible') refreshBadge();  // 동기화만 (지우지 않음)
 });
 
 // ═══════════════════════════════════════════════════
