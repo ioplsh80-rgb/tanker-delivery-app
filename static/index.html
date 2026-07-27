@@ -2950,6 +2950,7 @@ async function enablePush() {
     const r = await api('POST', '/push/test');
     if (!r.vapid_configured) { showToast('⚠️ 서버 알림 키(VAPID)가 설정되지 않았습니다.'); return; }
     if (!r.library_ok) { showToast('⚠️ 서버 알림 모듈이 설치되지 않았습니다.'); return; }
+    if (!r.key_valid) { alert(`⚠️ 서버 알림 키가 올바르지 않습니다.\n현재 길이: ${r.key_length}자 (정상: 43자)\nRailway의 VAPID_PRIVATE_KEY 값을 다시 확인해주세요.`); return; }
     if (r.devices === 0) { showToast('⚠️ 기기 등록이 저장되지 않았습니다.'); return; }
     const fails = (r.results || []).filter(x => x !== '성공');
     if (fails.length) {

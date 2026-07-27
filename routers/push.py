@@ -64,7 +64,7 @@ def test_push(
     """본인 기기로 테스트 알림을 즉시 발송하고 기기별 상세 결과 반환 (진단용)"""
     subs = db.query(models.PushSubscription).filter(
         models.PushSubscription.user_id == current_user.id).all()
-    private_key = os.getenv("VAPID_PRIVATE_KEY")
+    private_key = (os.getenv("VAPID_PRIVATE_KEY") or "").strip()
     vapid_ok = bool(private_key)
     try:
         from pywebpush import webpush, WebPushException
@@ -72,8 +72,18 @@ def test_push(
     except ImportError:
         lib_ok = False
 
+    # 키 자체가 유효한지 미리 검사 (값은 노출하지 않고 길이만 반환)
+    key_valid = False
+    if private_key and lib_ok:
+        try:
+            from py_vapid import Vapid01
+            Vapid01.from_string(private_key)
+            key_valid = True
+        except Exception:
+            key_valid = False
+
     results = []
-    if subs and vapid_ok and lib_ok:
+    if subs and vapid_ok and lib_ok and key_valid:
         payload = json.dumps({
             "title": "🔔 테스트 알림",
             "body": f"{current_user.name}님, 알림이 정상 작동합니다!",
@@ -99,7 +109,8 @@ def test_push(
             except Exception as e:
                 results.append(f"오류({type(e).__name__}): {str(e)[:150]}")
     return {"devices": len(subs), "vapid_configured": vapid_ok,
-            "library_ok": lib_ok, "results": results}
+            "library_ok": lib_ok, "results": results,
+            "key_length": len(private_key), "key_valid": key_valid}
 
 
 @router.post("/unsubscribe")
