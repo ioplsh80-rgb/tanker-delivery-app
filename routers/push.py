@@ -56,6 +56,26 @@ def subscribe(
     return {"success": True}
 
 
+@router.post("/test")
+def test_push(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """본인 기기로 테스트 알림 발송 + 진단 정보 반환"""
+    devices = db.query(models.PushSubscription).filter(
+        models.PushSubscription.user_id == current_user.id).count()
+    vapid_ok = bool(os.getenv("VAPID_PRIVATE_KEY"))
+    try:
+        from pywebpush import webpush  # noqa: F401
+        lib_ok = True
+    except ImportError:
+        lib_ok = False
+    if devices and vapid_ok and lib_ok:
+        send_push_to_users([current_user.id], "🔔 테스트 알림",
+                           f"{current_user.name}님, 알림이 정상 작동합니다!", "/")
+    return {"devices": devices, "vapid_configured": vapid_ok, "library_ok": lib_ok}
+
+
 @router.post("/unsubscribe")
 def unsubscribe(
     body: SubscriptionBody,

@@ -2941,25 +2941,31 @@ async function subscribePush() {
 }
 
 async function enablePush() {
-  if (!pushSupported()) { showToast('⚠️ 이 브라우저는 알림을 지원하지 않습니다.'); return; }
+  if (!pushSupported()) { showToast('⚠️ 이 브라우저는 알림을 지원하지 않습니다. (아이폰은 홈 화면에 설치한 앱에서만 가능)'); return; }
   try {
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { showToast('⚠️ 알림 권한이 거부되었습니다.'); return; }
+    if (perm !== 'granted') { showToast('⚠️ 알림 권한이 거부되었습니다. 휴대폰 설정에서 허용해주세요.'); return; }
     await subscribePush();
-    document.getElementById('btnEnablePush').classList.add('hidden');
-    showToast('🔔 알림이 켜졌습니다.');
-  } catch (e) { showToast('⚠️ 알림 설정 실패'); }
+    // 진단 겸 테스트 알림 발송
+    const r = await api('POST', '/push/test');
+    if (!r.vapid_configured) { showToast('⚠️ 서버 알림 키(VAPID)가 설정되지 않았습니다.'); return; }
+    if (!r.library_ok) { showToast('⚠️ 서버 알림 모듈이 설치되지 않았습니다.'); return; }
+    if (r.devices === 0) { showToast('⚠️ 기기 등록이 저장되지 않았습니다.'); return; }
+    showToast(`🔔 테스트 알림을 보냈습니다 (등록 기기 ${r.devices}대). 잠시 후 알림을 확인하세요.`);
+    document.getElementById('btnEnablePush').textContent = '🔔 알림 테스트';
+  } catch (e) { showToast('⚠️ 알림 설정 실패: ' + (e.message || '')); }
 }
 
-// 로그인 후 호출: 권한 상태에 따라 자동 구독 또는 버튼 표시
+// 로그인 후 호출: 권한 상태에 따라 자동 구독, 버튼은 항상 표시 (테스트 용도)
 async function initPush() {
-  if (!pushSupported()) return;
   const btn = document.getElementById('btnEnablePush');
+  if (!pushSupported()) { btn.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
   if (Notification.permission === 'granted') {
     try { await subscribePush(); } catch (e) {}
-    btn.classList.add('hidden');
-  } else if (Notification.permission === 'default') {
-    btn.classList.remove('hidden');
+    btn.textContent = '🔔 알림 테스트';
+  } else {
+    btn.textContent = '🔔 알림 켜기';
   }
 }
 
