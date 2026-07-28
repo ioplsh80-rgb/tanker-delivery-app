@@ -22,6 +22,27 @@ class CompanyNoticeResponse(BaseModel):
         from_attributes = True
 
 
+# ── 단계별 안전 유의사항 (상차/하차) ──────────────────────
+class StageNoticeCreate(BaseModel):
+    stage: str
+    content: str
+
+
+class StageNoticeUpdate(BaseModel):
+    content: str
+
+
+class StageNoticeResponse(BaseModel):
+    id: int
+    stage: str
+    content: str
+    drive_file_id: Optional[str] = None
+    order_num: int
+
+    class Config:
+        from_attributes = True
+
+
 class CompanyCreate(BaseModel):
     name: str
     address: Optional[str] = None

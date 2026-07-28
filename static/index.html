@@ -290,6 +290,7 @@ header h2 { font-size: 16px; font-weight: 700; }
     <button class="tab-btn" onclick="switchTab('vehicles', this)">🚗 기사 관리</button>
     <button class="tab-btn" onclick="switchTab('items', this)">🗂️ 품목 관리</button>
     <button class="tab-btn" onclick="switchTab('companies', this)">🏢 고객사 관리</button>
+    <button class="tab-btn" onclick="switchTab('stagenotices', this)">🛡️ 안전 유의사항</button>
     <button class="tab-btn" onclick="switchTab('users', this)">⚙️ 사용자 관리</button>
   </div>
 
@@ -392,6 +393,30 @@ header h2 { font-size: 16px; font-weight: 700; }
       </div>
       <div class="info-box">💡 배송 할당 시 선택할 수 있는 고객사 목록을 관리합니다.</div>
       <div id="companyTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
+
+    <!-- 관리자: 안전 유의사항 (상차/하차) -->
+    <div id="tab-stagenotices" class="hidden">
+      <div class="section-header">
+        <h3>안전 유의사항</h3>
+      </div>
+      <div class="info-box">💡 전 고객사 공통으로 적용됩니다. 기사·관리자가 해당 단계를 진행할 때 한 건씩 확인하고 동의해야 넘어갈 수 있습니다.</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:320px;">
+          <div class="section-header">
+            <h3 style="font-size:15px;">📦 상차 유의사항 <span id="sn-loaded-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></h3>
+            <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;" onclick="addStageNoticeRow('loaded')">+ 추가</button>
+          </div>
+          <div id="sn-loaded-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+        <div style="flex:1;min-width:320px;">
+          <div class="section-header">
+            <h3 style="font-size:15px;">📥 하차 유의사항 <span id="sn-unloaded-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></h3>
+            <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;" onclick="addStageNoticeRow('unloaded')">+ 추가</button>
+          </div>
+          <div id="sn-unloaded-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </div>
     </div>
 
     <!-- 관리자: 사용자 관리 -->
@@ -609,7 +634,7 @@ header h2 { font-size: 16px; font-weight: 700; }
 <div id="noticeAckModal" class="modal-overlay hidden">
   <div class="modal" style="max-width:480px;">
     <div class="modal-header" style="background:#fffbeb;border-bottom:2px solid #f59e0b;">
-      <h3 style="color:#92400e;">⚠️ 배송지 유의사항 확인</h3>
+      <h3 style="color:#92400e;" id="noticeAckTitle">⚠️ 배송지 유의사항 확인</h3>
     </div>
     <div class="modal-body" id="noticeAckBody"></div>
     <div class="modal-footer" id="noticeAckFooter" style="justify-content:space-between;"></div>
@@ -1175,7 +1200,7 @@ async function initApp() {
     await Promise.all([loadItems(), loadCompanies()]);
     // 일반 관리자는 관리 탭 숨기기
     if (currentUser.role !== 'superadmin') {
-      ['vehicles','items','companies','users'].forEach(t => {
+      ['vehicles','items','companies','stagenotices','users'].forEach(t => {
         const btn = document.querySelector(`[onclick="switchTab('${t}', this)"]`);
         if (btn) btn.style.display = 'none';
       });
@@ -1191,7 +1216,7 @@ async function initApp() {
     document.getElementById('driverTabs').classList.remove('hidden');
     document.getElementById('headerTitle').textContent = '기사 배송 현황';
     // 관리자용 화면(대시보드 등)을 전부 숨기고 기사 화면만 표시
-    ['dashboard','deliveries','drivers','vehicles','items','companies','users','myHistory'].forEach(t => {
+    ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','myHistory'].forEach(t => {
       const el = document.getElementById('tab-' + t);
       if (el) el.classList.add('hidden');
     });
@@ -1201,6 +1226,7 @@ async function initApp() {
     await loadMyDeliveries();
   }
 
+  await loadStageNotices();   // 상차/하차 유의사항 (확인 절차에 필요)
   initPush();   // 알림 권한 상태에 따라 자동 구독 또는 '알림 켜기' 버튼 표시
 
   // 푸시 알림 클릭으로 진입한 경우 해당 배송카드 열기 (/?open=ID)
@@ -1217,7 +1243,7 @@ if (currentUser) { initApp(); }  // 쿠키가 만료됐으면 첫 API 호출의 
 // 탭 전환
 // ═══════════════════════════════════════════════════
 function switchTab(name, btn) {
-  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','companies','users','myDeliveries','myHistory'];
+  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','myDeliveries','myHistory'];
   allTabs.forEach(t => { const el = document.getElementById('tab-' + t); if (el) el.classList.add('hidden'); });
   document.getElementById('tab-' + name).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1230,6 +1256,7 @@ function switchTab(name, btn) {
   else if (name === 'vehicles')   loadVehicleTab();
   else if (name === 'items')      loadItemTab();
   else if (name === 'companies')  loadCompanyTab();
+  else if (name === 'stagenotices') loadStageNoticeTab();
   else if (name === 'users')      loadUsers();
   else if (name === 'myDeliveries') loadMyDeliveries();
   else if (name === 'myHistory')  { initHistoryFilter(); loadMyHistory(); }
@@ -1504,6 +1531,112 @@ async function openEditCompanyModal(id, name, address, contactName, contactPhone
   document.getElementById('ec-notes').value = notes;
   document.getElementById('editCompanyModal').classList.remove('hidden');
   await loadNotices(id);
+}
+
+// ═══════════════════════════════════════════════════
+// 안전 유의사항 (상차/하차) 관리
+// ═══════════════════════════════════════════════════
+const STAGE_LABELS_KO = { loaded: '상차', unloaded: '하차' };
+let stageNotices = { loaded: [], unloaded: [] };
+
+async function loadStageNotices() {
+  try {
+    const list = await api('GET', '/stage-notices') || [];
+    stageNotices = { loaded: [], unloaded: [] };
+    list.forEach(n => { if (stageNotices[n.stage]) stageNotices[n.stage].push(n); });
+  } catch (e) { stageNotices = { loaded: [], unloaded: [] }; }
+}
+
+async function loadStageNoticeTab() {
+  await loadStageNotices();
+  ['loaded', 'unloaded'].forEach(renderStageNoticeList);
+}
+
+function renderStageNoticeList(stage) {
+  const list = document.getElementById(`sn-${stage}-list`);
+  const items = stageNotices[stage] || [];
+  document.getElementById(`sn-${stage}-count`).textContent = `(${items.length}/10)`;
+  if (!items.length) {
+    list.innerHTML = '<div style="color:#9ca3af;font-size:13px;">등록된 유의사항이 없습니다.</div>';
+    return;
+  }
+  const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+  list.innerHTML = items.map((n, i) => `
+    <div class="notice-item" id="sn-item-${n.id}">
+      <div class="notice-item-row">
+        <span class="notice-num">${nums[i] || (i + 1)}</span>
+        <textarea class="notice-input" rows="2" id="sn-text-${n.id}" onblur="saveStageNoticeContent(${n.id},'${stage}')">${escapeHtml(n.content)}</textarea>
+        <label class="btn btn-sm btn-outline" style="cursor:pointer;padding:4px 8px;" title="사진 첨부">
+          📎<input type="file" accept="image/*" style="display:none" onchange="uploadStageNoticePhoto(this,${n.id},'${stage}')">
+        </label>
+        <button class="btn btn-sm btn-danger" onclick="deleteStageNotice(${n.id},'${stage}')">🗑️</button>
+      </div>
+      ${n.drive_file_id ? `<div style="margin-left:30px;"><img class="notice-photo-preview" src="/api/photos/${n.drive_file_id}" onclick="viewPhoto('/api/photos/${n.drive_file_id}','${n.drive_file_id}')"></div>` : ''}
+    </div>`).join('');
+}
+
+function addStageNoticeRow(stage) {
+  const list = document.getElementById(`sn-${stage}-list`);
+  if (document.getElementById(`sn-new-${stage}`)) return;
+  const empty = list.querySelector('div[style*="color:#9ca3af"]');
+  if (empty) empty.remove();
+  const tmp = document.createElement('div');
+  tmp.className = 'notice-item';
+  tmp.id = `sn-new-${stage}`;
+  tmp.innerHTML = `
+    <div class="notice-item-row">
+      <span class="notice-num">✏️</span>
+      <textarea class="notice-input" rows="2" id="sn-new-text-${stage}" placeholder="유의사항 내용을 입력하세요 (여러 줄 가능)"></textarea>
+      <button class="btn btn-sm btn-primary" onclick="saveNewStageNotice('${stage}')">저장</button>
+      <button class="btn btn-sm btn-gray" onclick="document.getElementById('sn-new-${stage}').remove()">취소</button>
+    </div>`;
+  list.appendChild(tmp);
+  document.getElementById(`sn-new-text-${stage}`).focus();
+}
+
+async function saveNewStageNotice(stage) {
+  const content = document.getElementById(`sn-new-text-${stage}`).value.trim();
+  if (!content) { showToast('⚠️ 내용을 입력해주세요.'); return; }
+  try {
+    await api('POST', '/stage-notices', { stage, content });
+    showToast('✅ 유의사항이 추가되었습니다.');
+    await loadStageNoticeTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function saveStageNoticeContent(id, stage) {
+  const content = document.getElementById(`sn-text-${id}`)?.value.trim();
+  if (!content) return;
+  try {
+    await api('PATCH', `/stage-notices/${id}`, { content });
+    await loadStageNotices();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function deleteStageNotice(id, stage) {
+  if (!confirm('이 유의사항을 삭제하시겠습니까?')) return;
+  try {
+    await api('DELETE', `/stage-notices/${id}`);
+    showToast('✅ 삭제되었습니다.');
+    await loadStageNoticeTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+async function uploadStageNoticePhoto(input, id, stage) {
+  if (!input.files || !input.files[0]) return;
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  input.value = '';
+  try {
+    showToast('📤 사진 업로드 중...');
+    const res = await fetch(`/api/stage-notices/${id}/photo`, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '업로드 실패');
+    }
+    showToast('✅ 사진이 업로드되었습니다.');
+    await loadStageNoticeTab();
+  } catch (e) { showToast('⚠️ ' + e.message); }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1928,14 +2061,33 @@ function buildCardActions(d, mode) {
 // ═══════════════════════════════════════════════════
 // 상태 변경
 // ═══════════════════════════════════════════════════
+// 상차/하차: 등록된 유의사항이 있으면 확인·동의 후에만 진행 (기사·관리자 동일)
+async function doStatusStep(id, status, timeField, toastMsg) {
+  const proceed = async () => {
+    try {
+      const body = { status };
+      if (timeField) body[timeField] = nowTime();
+      await api('PATCH', `/deliveries/${id}/status`, body);
+      showToast(toastMsg);
+      refreshCurrentTab();
+      closeModal('detailModal');
+    } catch (e) { showToast('⚠️ ' + e.message); }
+  };
+  if ((stageNotices[status] || []).length) return runStageAck(id, status, proceed);
+  if (!confirm(`"${STATUS_LABELS[status]}" 처리하시겠습니까?`)) return;
+  return proceed();
+}
+
 async function changeStatus(id, status) {
+  // 상차·하차는 유의사항 확인 절차를 거침
+  if (status === 'loaded')   return confirmLoaded(id);
+  if (status === 'unloaded') return confirmUnloaded(id);
+
   const label = STATUS_LABELS[status] || status;
   if (!confirm(`"${label}"으로 처리하시겠습니까?`)) return;
   try {
     const body = { status };
-    if (status === 'start')    body.work_start_time = nowTime();
-    if (status === 'loaded')   body.loading_complete_time = nowTime();
-    if (status === 'unloaded') body.unloaded_time = nowTime();
+    if (status === 'start') body.work_start_time = nowTime();
     await api('PATCH', `/deliveries/${id}/status`, body);
     showToast(`"${label}"으로 변경되었습니다.`);
     refreshCurrentTab();
@@ -1967,26 +2119,11 @@ async function confirmStart(id) {
 }
 
 async function confirmLoaded(id) {
-  if (!confirm('상차 처리하시겠습니까?')) return;
-  try {
-    await api('PATCH', `/deliveries/${id}/status`, {
-      status: 'loaded',
-      loading_complete_time: nowTime(),
-    });
-    showToast('📦 상차 처리되었습니다.');
-    refreshCurrentTab();
-    closeModal('detailModal');
-  } catch (e) { showToast('⚠️ ' + e.message); }
+  return doStatusStep(id, 'loaded', 'loading_complete_time', '📦 상차 처리되었습니다.');
 }
 
 async function confirmUnloaded(id) {
-  if (!confirm('하차 처리하시겠습니까?')) return;
-  try {
-    await api('PATCH', `/deliveries/${id}/status`, { status: 'unloaded', unloaded_time: nowTime() });
-    showToast('📥 하차 처리되었습니다.');
-    refreshCurrentTab();
-    closeModal('detailModal');
-  } catch (e) { showToast('⚠️ ' + e.message); }
+  return doStatusStep(id, 'unloaded', 'unloaded_time', '📥 하차 처리되었습니다.');
 }
 
 // ═══════════════════════════════════════════════════
@@ -2010,7 +2147,12 @@ async function openDetail(id) {
         const acks = await api('GET', `/deliveries/${id}/notice-ack`) || [];
         if (!acks.some(a => a.user_id === currentUser.id)) {
           closeModal('detailModal');
-          startNoticeAck(d, notices);
+          startNoticeAck({
+            deliveryId: d.id,
+            notices,
+            headerText: `<b>${escapeHtml(d.company)}</b> 배송지의 유의사항입니다. 반드시 읽고 확인해주세요.`,
+            onAgree: () => { refreshCurrentTab(); openDetail(d.id); },
+          });
           return;
         }
       }
@@ -2021,6 +2163,23 @@ async function openDetail(id) {
   }
 }
 
+// 상차/하차 유의사항 확인 여부 표시 (시간 기록 하단)
+async function loadStageAckStatus(d) {
+  const el = document.getElementById('stage-ack-line');
+  if (!el) return;
+  const stages = ['loaded', 'unloaded'].filter(st => (stageNotices[st] || []).length);
+  if (!stages.length) { el.innerHTML = ''; return; }
+  try {
+    const acks = await api('GET', `/deliveries/${d.id}/notice-ack`) || [];
+    el.innerHTML = stages.map(st => {
+      const a = acks.find(x => x.stage === st);
+      return a
+        ? `<span style="color:#166534;margin-right:14px;">✅ ${STAGE_LABELS_KO[st]} 유의사항 확인 (${escapeHtml(a.user_name)} · ${formatChatTime(a.agreed_at)})</span>`
+        : `<span style="color:#9ca3af;margin-right:14px;">⏳ ${STAGE_LABELS_KO[st]} 유의사항 미확인</span>`;
+    }).join('');
+  } catch (e) {}
+}
+
 // 유의사항 확인 여부 표시 (배송카드 상세 배너 하단)
 async function loadAckStatus(d) {
   const el = document.getElementById('ack-status-line');
@@ -2028,12 +2187,12 @@ async function loadAckStatus(d) {
   try {
     const acks = await api('GET', `/deliveries/${d.id}/notice-ack`) || [];
     if (currentUser.role === 'driver') {
-      const mine = acks.find(a => a.user_id === currentUser.id);
+      const mine = acks.find(a => a.user_id === currentUser.id && !a.stage);
       el.innerHTML = mine ? `<span style="color:#166534;">✅ 유의사항 확인 완료 (${formatChatTime(mine.agreed_at)})</span>` : '';
       return;
     }
     if (!d.driver_id) { el.innerHTML = '<span style="color:#9ca3af;">배차 후 기사가 확인하게 됩니다.</span>'; return; }
-    const driverAck = acks.find(a => a.user_id === d.driver_id);
+    const driverAck = acks.find(a => a.user_id === d.driver_id && !a.stage);
     el.innerHTML = driverAck
       ? `<span style="color:#166534;">✅ 기사 유의사항 확인 완료 (${formatChatTime(driverAck.agreed_at)})</span>`
       : '<span style="color:#dc2626;">⏳ 기사 유의사항 미확인</span>';
@@ -2043,41 +2202,36 @@ async function loadAckStatus(d) {
 // ═══════════════════════════════════════════════════
 // 유의사항 확인(동의) 절차 - 기사 전용
 // ═══════════════════════════════════════════════════
-let ackDeliveryId = null;
-let ackCompanyName = '';
-let ackNotices = [];
-let ackIdx = 0;
+let ackState = null;   // {deliveryId, stage, notices, title, headerText, onAgree, idx}
 
 const ACK_AGREEMENT_TEXT = '담당자는 제시된 유의사항을 충분히 숙지하고 이해해야 하며, 부주의로 인해 사고가 발생하는 경우에는 그 책임은 업무 담당자에게 있습니다.';
 
-function startNoticeAck(d, notices) {
-  ackDeliveryId = d.id;
-  ackCompanyName = d.company;
-  ackNotices = notices;
-  ackIdx = 0;
+function startNoticeAck(opts) {
+  ackState = Object.assign({ idx: 0, stage: null, title: '⚠️ 배송지 유의사항 확인' }, opts);
+  document.getElementById('noticeAckTitle').textContent = ackState.title;
   document.getElementById('noticeAckModal').classList.remove('hidden');
   renderAckStep();
 }
 
 function renderAckStep() {
+  if (!ackState) return;
   const body = document.getElementById('noticeAckBody');
   const footer = document.getElementById('noticeAckFooter');
-  const total = ackNotices.length;
+  const total = ackState.notices.length;
+  const idx = ackState.idx;
 
-  if (ackIdx < total) {
-    const n = ackNotices[ackIdx];
+  if (idx < total) {
+    const n = ackState.notices[idx];
     body.innerHTML = `
-      <div style="font-size:13px;color:#6b7280;margin-bottom:10px;">
-        <b>${escapeHtml(ackCompanyName)}</b> 배송지의 유의사항입니다. 반드시 읽고 확인해주세요.
-      </div>
+      <div style="font-size:13px;color:#6b7280;margin-bottom:10px;">${ackState.headerText}</div>
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;">
-        <div style="font-weight:700;color:#92400e;margin-bottom:10px;">유의사항 ${ackIdx + 1} / ${total}</div>
+        <div style="font-weight:700;color:#92400e;margin-bottom:10px;">유의사항 ${idx + 1} / ${total}</div>
         <div style="font-size:15px;line-height:1.7;color:#1f2937;white-space:pre-line;">${escapeHtml(n.content)}</div>
         ${n.drive_file_id ? `<img src="/api/photos/${n.drive_file_id}" style="margin-top:12px;max-width:100%;border-radius:8px;">` : ''}
       </div>`;
     footer.innerHTML = `
       <button class="btn btn-gray btn-sm" onclick="cancelNoticeAck()">닫기</button>
-      <button class="btn btn-primary" onclick="nextAckStep()">확인했습니다 (${ackIdx + 1}/${total}) →</button>`;
+      <button class="btn btn-primary" onclick="nextAckStep()">확인했습니다 (${idx + 1}/${total}) →</button>`;
   } else {
     body.innerHTML = `
       <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:18px;">
@@ -2092,27 +2246,44 @@ function renderAckStep() {
 }
 
 function nextAckStep() {
-  ackIdx += 1;
+  if (!ackState) return;
+  ackState.idx += 1;
   renderAckStep();
 }
 
 function cancelNoticeAck() {
-  // 동의하지 않으면 카드를 열 수 없음 (다음에 열 때 다시 확인 절차 진행)
+  // 동의하지 않으면 진행되지 않음 (다음에 다시 확인 절차 진행)
   document.getElementById('noticeAckModal').classList.add('hidden');
-  ackDeliveryId = null;
+  ackState = null;
 }
 
 async function submitNoticeAck() {
+  if (!ackState) return;
+  const { deliveryId, stage, onAgree } = ackState;
   try {
-    await api('POST', `/deliveries/${ackDeliveryId}/notice-ack`);
-    const id = ackDeliveryId;
+    await api('POST', `/deliveries/${deliveryId}/notice-ack${stage ? '?stage=' + stage : ''}`);
     document.getElementById('noticeAckModal').classList.add('hidden');
-    ackDeliveryId = null;
-    myAckedIds.add(id);   // 목록의 정보 가림 즉시 해제
-    showToast('✅ 유의사항 확인이 기록되었습니다.');
-    refreshCurrentTab();
-    openDetail(id);
+    ackState = null;
+    if (!stage) myAckedIds.add(deliveryId);   // 목록의 정보 가림 즉시 해제
+    showToast('✅ 확인이 기록되었습니다.');
+    if (onAgree) await onAgree();
   } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// 단계(상차/하차) 진행 전 유의사항 확인 - 등록된 유의사항이 없으면 바로 진행
+async function runStageAck(deliveryId, stage, proceed) {
+  const notices = stageNotices[stage] || [];
+  if (!notices.length) return proceed();
+  try {
+    const acks = await api('GET', `/deliveries/${deliveryId}/notice-ack`) || [];
+    if (acks.some(a => a.user_id === currentUser.id && a.stage === stage)) return proceed();
+  } catch (e) {}
+  startNoticeAck({
+    deliveryId, stage, notices,
+    title: `${STAGE_LABELS_KO[stage]} 유의사항 확인`,
+    headerText: `<b>${STAGE_LABELS_KO[stage]} 작업 전</b> 반드시 확인해야 할 사항입니다.`,
+    onAgree: proceed,
+  });
 }
 
 function renderDetail(d) {
@@ -2196,6 +2367,7 @@ function renderDetail(d) {
         <div><div class="di-label">계근표 등록</div><div class="di-val">${d.weighed_time || '-'}</div></div>
         <div><div class="di-label">완료</div><div class="di-val">${d.complete_time || '-'}</div></div>
       </div>
+      <div id="stage-ack-line" style="margin-top:10px;font-size:12px;"></div>
     </div>
 
     <div class="detail-section">
@@ -2234,6 +2406,7 @@ function renderDetail(d) {
   if (document.getElementById('detail-viewers'))
     renderViewerChecklist('detail-viewers', d.viewer_ids || []);
   if (notices.length > 0) loadAckStatus(d);
+  loadStageAckStatus(d);
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
 

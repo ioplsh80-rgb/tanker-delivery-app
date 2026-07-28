@@ -418,7 +418,7 @@ def get_notice_acks(
         models.DeliveryNoticeAck.delivery_id == delivery_id).all()
     return [
         {"user_id": a.user_id, "user_name": a.user.name if a.user else "-",
-         "agreed_at": a.agreed_at.isoformat()}
+         "stage": a.stage, "agreed_at": a.agreed_at.isoformat()}
         for a in acks
     ]
 
@@ -426,10 +426,12 @@ def get_notice_acks(
 @router.post("/{delivery_id}/notice-ack")
 def create_notice_ack(
     delivery_id: int,
+    stage: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """유의사항 확인(동의) 기록 - 동의 시점의 유의사항 전문을 함께 저장"""
+    """유의사항 확인(동의) 기록 - 동의 시점의 유의사항 전문을 함께 저장.
+    stage 없음: 배송지(고객사) 주의사항 / stage=loaded·unloaded: 단계별 안전 유의사항"""
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
@@ -438,20 +440,28 @@ def create_notice_ack(
     existing = db.query(models.DeliveryNoticeAck).filter(
         models.DeliveryNoticeAck.delivery_id == delivery_id,
         models.DeliveryNoticeAck.user_id == current_user.id,
+        models.DeliveryNoticeAck.stage.is_(None) if stage is None
+        else models.DeliveryNoticeAck.stage == stage,
     ).first()
     if existing:
         return {"success": True, "already": True}
 
     # 동의 시점의 유의사항 내용을 증빙으로 저장
-    company = db.query(models.Company).filter(models.Company.name == d.company).first()
-    snapshot = []
-    if company:
+    if stage:
+        snapshot = [
+            {"content": n.content, "drive_file_id": n.drive_file_id}
+            for n in db.query(models.StageNotice).filter(
+                models.StageNotice.stage == stage
+            ).order_by(models.StageNotice.order_num).all()
+        ]
+    else:
+        company = db.query(models.Company).filter(models.Company.name == d.company).first()
         snapshot = [
             {"content": n.content, "drive_file_id": n.drive_file_id}
             for n in company.notices
-        ]
+        ] if company else []
     db.add(models.DeliveryNoticeAck(
-        delivery_id=delivery_id, user_id=current_user.id,
+        delivery_id=delivery_id, user_id=current_user.id, stage=stage,
         notices_snapshot=json.dumps(snapshot, ensure_ascii=False),
     ))
     db.commit()
@@ -580,12 +590,19 @@ def revert_status(
 
     # 되돌린 지점보다 뒤 단계의 시간 기록만 초기화
     new_idx = FLOW.index(prev_status)
-    for later_status in FLOW[new_idx + 1:]:
+    later_stages = FLOW[new_idx + 1:]
+    for later_status in later_stages:
         field = STATUS_TIME_FIELDS.get(later_status)
         if field:
             setattr(d, field, None)
         if later_status == "done":
             d.complete_memo = None
+
+    # 되돌린 단계의 안전 유의사항 확인 기록 삭제 → 재진행 시 다시 확인
+    db.query(models.DeliveryNoticeAck).filter(
+        models.DeliveryNoticeAck.delivery_id == delivery_id,
+        models.DeliveryNoticeAck.stage.in_(later_stages),
+    ).delete(synchronize_session=False)
 
     d.updated_at = datetime.utcnow()
     db.commit()

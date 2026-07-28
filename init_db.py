@@ -35,6 +35,7 @@ migrations = [
     ("deliveries", "work_start_time", "VARCHAR(5)"),
     ("deliveries", "weighed_time",  "VARCHAR(5)"),
     ("deliveries", "assigned_by",   "INTEGER"),
+    ("delivery_notice_acks", "stage", "VARCHAR(10)"),
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
 ]

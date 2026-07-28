@@ -59,6 +59,18 @@ class CompanyNotice(Base):
     company = relationship("Company", back_populates="notices")
 
 
+class StageNotice(Base):
+    """단계별 안전 유의사항 (상차/하차 등) - 전 고객사 공통, 단계 확장 가능"""
+    __tablename__ = "stage_notices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stage = Column(String(10), nullable=False, index=True)   # loaded(상차) / unloaded(하차)
+    content = Column(Text, nullable=False)
+    drive_file_id = Column(String(200))
+    order_num = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Item(Base):
     """품목 관리"""
     __tablename__ = "items"
@@ -163,12 +175,14 @@ class DeliveryMessageRead(Base):
 
 
 class DeliveryNoticeAck(Base):
-    """배송카드 유의사항 확인(동의) 기록"""
+    """유의사항 확인(동의) 기록.
+    stage=NULL: 배송지(고객사) 주의사항 / stage='loaded','unloaded': 단계별 안전 유의사항"""
     __tablename__ = "delivery_notice_acks"
 
     id = Column(Integer, primary_key=True, index=True)
     delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    stage = Column(String(10), nullable=True, index=True)
     agreed_at = Column(DateTime, default=datetime.utcnow)
     notices_snapshot = Column(Text)   # 동의 시점의 유의사항 전문 (JSON) - 증빙용
 

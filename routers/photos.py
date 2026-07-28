@@ -42,6 +42,11 @@ def _check_photo_permission(file_id: str, db: Session, current_user: models.User
     if notice:
         return  # 주의사항 사진은 로그인 사용자 누구나
 
+    stage_notice = db.query(models.StageNotice).filter(
+        models.StageNotice.drive_file_id == file_id).first()
+    if stage_notice:
+        return  # 상하차 안전 유의사항 사진도 로그인 사용자 누구나
+
     raise HTTPException(status_code=404, detail="사진을 찾을 수 없습니다.")
 
 
