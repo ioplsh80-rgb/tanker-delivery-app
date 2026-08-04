@@ -2,8 +2,6 @@
 초기 데이터 생성 스크립트
 실행: python init_db.py
 """
-from datetime import datetime
-
 import models
 from database import SessionLocal, engine
 from routers.auth import get_password_hash
@@ -157,117 +155,6 @@ if db.query(models.Company).count() == 0:
     print(f"✅ 고객사 {len(seed_companies)}개 생성 완료")
 else:
     print("ℹ️  고객사 데이터가 이미 존재합니다. 건너뜁니다.")
-
-# ── [1회성] 고객사 주의사항을 '하이닉스(이천)' 것으로 통일 ────────────
-# 활성 고객사 전체의 기존 주의사항을 지우고 원본 고객사의 주의사항으로 맞춘다.
-# 원본 고객사 자신은 건드리지 않는다.
-# 삭제분은 company_notices_backup 에 백업하고, oneoff_flags 로 1회만 실행한다.
-# ※ 실행 확인 후 다음 배포 때 이 블록을 제거할 것.
-SRC_COMPANY_NAME = "하이닉스(이천)"
-UNIFY_FLAG_KEY = "unify_company_notices_20260804"
-
-
-def unify_company_notices():
-    conn = db.connection()
-
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS oneoff_flags (
-            flag_key VARCHAR(100) PRIMARY KEY,
-            done_at TIMESTAMP
-        )
-    """))
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS company_notices_backup (
-            notice_id     INTEGER,
-            company_id    INTEGER,
-            company_name  VARCHAR(100),
-            content       TEXT,
-            drive_file_id VARCHAR(200),
-            order_num     INTEGER,
-            backed_up_at  TIMESTAMP
-        )
-    """))
-
-    done = conn.execute(
-        text("SELECT 1 FROM oneoff_flags WHERE flag_key = :k"),
-        {"k": UNIFY_FLAG_KEY},
-    ).first()
-    if done:
-        print("ℹ️  주의사항 통일: 이미 실행됨. 건너뜁니다.")
-        return
-
-    src = db.query(models.Company).filter(
-        models.Company.name == SRC_COMPANY_NAME).first()
-    if not src:
-        print(f"⚠️  주의사항 통일 중단: 고객사 '{SRC_COMPANY_NAME}' 을(를) 찾지 못했습니다.")
-        return
-
-    src_notices = (
-        db.query(models.CompanyNotice)
-        .filter(models.CompanyNotice.company_id == src.id)
-        .order_by(models.CompanyNotice.order_num, models.CompanyNotice.id)
-        .all()
-    )
-    if not src_notices:
-        print(f"⚠️  주의사항 통일 중단: '{SRC_COMPANY_NAME}' 에 등록된 주의사항이 없습니다.")
-        return
-
-    template = [(n.content, n.drive_file_id) for n in src_notices]
-    print(f"📋 원본 '{SRC_COMPANY_NAME}' 주의사항 {len(template)}개를 복사합니다.")
-
-    # 되돌릴 수 있도록 현재 주의사항 전체를 백업 (원본 포함)
-    now = datetime.utcnow()
-    all_notices = db.query(models.CompanyNotice).all()
-    id_to_name = {c.id: c.name for c in db.query(models.Company).all()}
-    for n in all_notices:
-        conn.execute(
-            text("""
-                INSERT INTO company_notices_backup
-                    (notice_id, company_id, company_name, content,
-                     drive_file_id, order_num, backed_up_at)
-                VALUES (:nid, :cid, :cname, :content, :fid, :onum, :ts)
-            """),
-            {"nid": n.id, "cid": n.company_id,
-             "cname": id_to_name.get(n.company_id), "content": n.content,
-             "fid": n.drive_file_id, "onum": n.order_num, "ts": now},
-        )
-    print(f"💾 기존 주의사항 {len(all_notices)}건을 company_notices_backup 에 백업했습니다.")
-
-    targets = (
-        db.query(models.Company)
-        .filter(models.Company.is_active == True, models.Company.id != src.id)
-        .order_by(models.Company.name)
-        .all()
-    )
-
-    removed = 0
-    for c in targets:
-        removed += (
-            db.query(models.CompanyNotice)
-            .filter(models.CompanyNotice.company_id == c.id)
-            .delete(synchronize_session=False)
-        )
-        for i, (content, fid) in enumerate(template):
-            db.add(models.CompanyNotice(
-                company_id=c.id, content=content,
-                drive_file_id=fid, order_num=i,
-            ))
-
-    conn.execute(
-        text("INSERT INTO oneoff_flags (flag_key, done_at) VALUES (:k, :ts)"),
-        {"k": UNIFY_FLAG_KEY, "ts": now},
-    )
-    db.commit()
-    print(f"✅ 활성 고객사 {len(targets)}곳에 주의사항 {len(template)}개씩 적용 "
-          f"(기존 {removed}건 삭제, 원본 '{SRC_COMPANY_NAME}' 제외)")
-
-
-try:
-    unify_company_notices()
-except Exception as e:
-    # 이 스크립트가 실패해도 서버 기동은 막지 않는다
-    db.rollback()
-    print(f"⚠️ 주의사항 통일 건너뜀: {e}")
 
 db.close()
 print("\n✅ 초기화 완료!")
