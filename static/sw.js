@@ -46,6 +46,34 @@ self.addEventListener("push", (event) => {
   })());
 });
 
+// ── 푸시 구독이 브라우저에서 갱신·폐기된 경우 자동 재등록 ──
+// 안드로이드(FCM)는 구독 주소가 주기적으로 바뀐다. 이때 다시 등록하지 않으면
+// 서버의 기기 등록이 만료 처리되어 알림이 조용히 끊긴다.
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = self.atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil((async () => {
+    try {
+      const res = await fetch("/api/push/public-key");
+      const { key } = await res.json();
+      const sub = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key),
+      });
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: sub.toJSON() }),
+      });
+    } catch (e) {}
+  })());
+});
+
 // 알림 클릭 → 앱 열기 (해당 배송카드로 이동)
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

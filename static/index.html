@@ -1124,8 +1124,14 @@ async function api(method, path, body = null, isForm = false) {
       opts.body = JSON.stringify(body);
     }
   }
-  const res = await fetch('/api' + path, opts);
-  if (res.status === 401) { doLogout(); return null; }
+  let res = await fetch('/api' + path, opts);
+  if (res.status === 401) {
+    // 통신이 순간적으로 끊기면 인증 정보가 빠진 채 전달될 수 있어 한 번만 다시 시도한다.
+    // (401은 서버가 처리 전에 거부한 것이라 다시 보내도 중복 처리되지 않음)
+    await new Promise(r => setTimeout(r, 1000));
+    res = await fetch('/api' + path, opts);
+    if (res.status === 401) { doLogout(true); return null; }
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || '오류가 발생했습니다.');
@@ -1172,8 +1178,13 @@ async function doLogin() {
   }
 }
 
-function doLogout() {
-  fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});  // 서버 쿠키 삭제
+// sessionExpired: 사용자가 누른 게 아니라 인증이 끊겨 자동으로 나가는 경우.
+// 이때는 서버 쿠키 삭제를 호출하지 않는다 (아직 쓸 수 있는 쿠키를 지워버리지 않기 위해).
+function doLogout(sessionExpired = false) {
+  if (sessionExpired && !currentUser) return;   // 동시 요청이 한꺼번에 실패해도 한 번만 처리
+  if (!sessionExpired) {
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});  // 서버 쿠키 삭제
+  }
   currentUser = null;
   localStorage.removeItem('token'); localStorage.removeItem('currentUser');
   document.getElementById('appPage').classList.add('hidden');
@@ -1182,6 +1193,7 @@ function doLogout() {
   document.getElementById('driverTabs').classList.add('hidden');
   document.getElementById('loginUsername').value = '';
   document.getElementById('loginPassword').value = '';
+  if (sessionExpired) showToast('로그인이 만료되었습니다. 다시 로그인해주세요.');
 }
 
 // ═══════════════════════════════════════════════════
@@ -3026,6 +3038,14 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
+// 저장소 보호 요청: 안드로이드는 저장공간이 부족하면 사이트 데이터(로그인 쿠키 포함)를
+// 임의로 정리한다. 이 요청이 승인되면 사용자가 직접 지우기 전까지 유지된다.
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persisted()
+    .then(granted => { if (!granted) return navigator.storage.persist(); })
+    .catch(() => {});
+}
+
 let deferredInstallPrompt = null;
 
 function isStandalone() {
@@ -3108,7 +3128,10 @@ async function closeNotificationsFor(deliveryId) {
 
 refreshBadge();
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') refreshBadge();  // 동기화만 (지우지 않음)
+  if (document.visibilityState === 'visible') {
+    refreshBadge();          // 동기화만 (지우지 않음)
+    syncPushSubscription();  // 구독이 바뀌었으면 서버에 다시 등록
+  }
 });
 
 // ═══════════════════════════════════════════════════
@@ -3136,6 +3159,17 @@ async function subscribePush() {
     });
   }
   await api('POST', '/push/subscribe', { subscription: sub.toJSON() });
+}
+
+// 앱을 다시 열 때마다 구독 상태를 점검한다. 안드로이드는 푸시 주소가 바뀌는 일이 잦고,
+// 그때 서버에 다시 등록하지 않으면 알림이 조용히 끊긴다. (1분 이내 중복 호출은 건너뜀)
+let lastPushSync = 0;
+async function syncPushSubscription() {
+  if (!currentUser || !pushSupported()) return;
+  if (Notification.permission !== 'granted') return;
+  if (Date.now() - lastPushSync < 60000) return;
+  lastPushSync = Date.now();
+  try { await subscribePush(); } catch (e) {}
 }
 
 async function enablePush() {

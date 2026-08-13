@@ -27,7 +27,19 @@ if not SECRET_KEY:
         "Railway Variables에 무작위 SECRET_KEY를 등록한 뒤 다시 배포하세요."
     )
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7일
+TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30일
+# 발급 후 이 시간이 지난 토큰은 요청이 들어올 때 새로 발급한다.
+# (앱을 계속 쓰는 동안에는 로그인이 풀리지 않도록 만료를 자동으로 미루는 방식)
+TOKEN_REFRESH_AFTER_SECONDS = 60 * 60 * 24  # 1일
+
+
+def set_auth_cookie(response: Response, token: str) -> None:
+    """인증 쿠키 설정. 발급 위치가 여러 곳이라 옵션을 한 곳에서 관리한다."""
+    response.set_cookie(
+        key=COOKIE_NAME, value=token,
+        httponly=True, secure=True, samesite="lax",
+        max_age=TOKEN_EXPIRE_MINUTES * 60, path="/",
+    )
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -47,6 +59,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def get_current_user(
     request: Request,
+    response: Response,
     token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> models.User:
@@ -68,10 +81,16 @@ def get_current_user(
     if not user or not user.is_active:
         raise credentials_exc
     # 비밀번호 변경 이전에 발급된 토큰은 무효
+    iat = payload.get("iat")
     if user.token_valid_from:
-        iat = payload.get("iat")
         if iat is None or iat < calendar.timegm(user.token_valid_from.utctimetuple()):
             raise credentials_exc
+
+    # 앱을 쓰는 동안에는 로그인이 풀리지 않도록 만료를 미룬다.
+    # 쿠키로 인증한 경우에만 갱신 (Authorization 헤더를 쓰는 외부 스크립트는 대상 아님)
+    if token == request.cookies.get(COOKIE_NAME):
+        if not iat or time.time() - iat > TOKEN_REFRESH_AFTER_SECONDS:
+            set_auth_cookie(response, create_access_token({"sub": user.username}))
     return user
 
 
@@ -111,11 +130,7 @@ def login(
 
     token = create_access_token({"sub": user.username})
     # HttpOnly 쿠키: 자바스크립트에서 접근 불가 (XSS로 토큰 탈취 방지)
-    response.set_cookie(
-        key=COOKIE_NAME, value=token,
-        httponly=True, secure=True, samesite="lax",
-        max_age=TOKEN_EXPIRE_MINUTES * 60, path="/",
-    )
+    set_auth_cookie(response, token)
     # access_token은 외부 스크립트(기사 일괄등록 등) 호환을 위해 응답에도 유지
     return {"access_token": token, "token_type": "bearer", "user": user}
 

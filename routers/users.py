@@ -7,8 +7,8 @@ from typing import List
 import models
 import schemas
 from database import get_db
-from routers.auth import (COOKIE_NAME, TOKEN_EXPIRE_MINUTES, create_access_token,
-                          get_current_user, get_password_hash, verify_password)
+from routers.auth import (create_access_token, get_current_user,
+                          get_password_hash, set_auth_cookie, verify_password)
 
 router = APIRouter()
 
@@ -146,12 +146,7 @@ def change_password(
     db.commit()
     # 본인 변경이면 새 토큰을 재발급해 로그인 상태 유지
     if current_user.id == user_id:
-        token = create_access_token({"sub": user.username})
-        response.set_cookie(
-            key=COOKIE_NAME, value=token,
-            httponly=True, secure=True, samesite="lax",
-            max_age=TOKEN_EXPIRE_MINUTES * 60, path="/",
-        )
+        set_auth_cookie(response, create_access_token({"sub": user.username}))
     return {"success": True}
 
 
