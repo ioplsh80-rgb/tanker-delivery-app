@@ -393,6 +393,11 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
           <option value="done">완료</option>
           <option value="cancel">취소</option>
         </select>
+        <select id="filterType" onchange="loadDeliveries()">
+          <option value="">출하·입하 전체</option>
+          <option value="출하">출하</option>
+          <option value="입하">입하</option>
+        </select>
         <select id="filterDriver" onchange="loadDeliveries()">
           <option value="">전체 기사</option>
         </select>
@@ -1943,11 +1948,13 @@ function loadDriverFilterOptions() {
 
 async function loadDeliveries() {
   const status   = document.getElementById('filterStatus').value;
+  const type     = document.getElementById('filterType').value;
   const driverId = document.getElementById('filterDriver').value;
   const dateFrom = document.getElementById('filterDateFrom').value;
   const dateTo   = document.getElementById('filterDateTo').value;
   let qs = new URLSearchParams();
   if (status)   qs.append('status', status);
+  if (type)     qs.append('delivery_type', type);
   if (driverId) qs.append('driver_id', driverId);
   if (dateFrom) qs.append('date_from', dateFrom);
   if (dateTo)   qs.append('date_to', dateTo);
@@ -3089,11 +3096,13 @@ async function submitAddUser() {
 // ═══════════════════════════════════════════════════
 async function downloadExcel() {
   const status   = document.getElementById('filterStatus')?.value || '';
+  const type     = document.getElementById('filterType')?.value || '';
   const driverId = document.getElementById('filterDriver')?.value || '';
   const dateFrom = document.getElementById('filterDateFrom')?.value || '';
   const dateTo   = document.getElementById('filterDateTo')?.value || '';
   let qs = new URLSearchParams();
   if (status)   qs.append('status', status);
+  if (type)     qs.append('delivery_type', type);   // 화면에 걸린 필터 그대로 내려받도록
   if (driverId) qs.append('driver_id', driverId);
   if (dateFrom) qs.append('date_from', dateFrom);
   if (dateTo)   qs.append('date_to', dateTo);

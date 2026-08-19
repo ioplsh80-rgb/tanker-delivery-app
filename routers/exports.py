@@ -9,6 +9,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
@@ -36,12 +37,21 @@ def export_excel(
     driver_id: Optional[int] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    delivery_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     query = _apply_visibility_filter(db.query(models.Delivery), db, current_user)
     if status:
         query = query.filter(models.Delivery.status == status)
+    if delivery_type:
+        # 화면 목록과 같은 기준으로 거른다 (빈 값은 출하로 취급)
+        if delivery_type == "출하":
+            query = query.filter(or_(models.Delivery.delivery_type == "출하",
+                                     models.Delivery.delivery_type.is_(None),
+                                     models.Delivery.delivery_type == ""))
+        else:
+            query = query.filter(models.Delivery.delivery_type == delivery_type)
     if driver_id:
         query = query.filter(models.Delivery.driver_id == driver_id)
     if date_from:

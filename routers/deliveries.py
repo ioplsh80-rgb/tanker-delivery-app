@@ -172,6 +172,7 @@ def get_deliveries(
     date: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    delivery_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -182,6 +183,14 @@ def get_deliveries(
 
     if status:
         query = query.filter(models.Delivery.status == status)
+    if delivery_type:
+        # 과거 데이터는 delivery_type이 비어 있을 수 있고, 그때는 출하로 취급한다
+        if delivery_type == "출하":
+            query = query.filter(or_(models.Delivery.delivery_type == "출하",
+                                     models.Delivery.delivery_type.is_(None),
+                                     models.Delivery.delivery_type == ""))
+        else:
+            query = query.filter(models.Delivery.delivery_type == delivery_type)
     if date:
         query = query.filter(models.Delivery.scheduled_date == date)
     if date_from:
