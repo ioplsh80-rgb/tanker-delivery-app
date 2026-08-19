@@ -166,6 +166,20 @@ header h2 { font-size: 16px; font-weight: 700; }
 .card-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px; }
 .meta-label { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
 .meta-val { color: #374151; font-weight: 500; margin-top: 2px; }
+/* 목록 검색칸 + 건수 표시 + 열 머리글 정렬 */
+.list-count { font-size: 13px; font-weight: 600; color: #6b7280; margin-left: 8px; }
+.list-count b { color: #2563eb; }
+.list-search { position: relative; margin-bottom: 12px; }
+.list-search input { width: 100%; padding: 10px 34px 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; box-sizing: border-box; }
+.list-search input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+.list-search-clear { position: absolute; top: 0; right: 0; height: 100%; width: 32px; border: none; background: none; color: #9ca3af; font-size: 13px; cursor: pointer; }
+.list-search-clear:hover { color: #374151; }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: #2563eb; }
+th.sortable.sorted { color: #2563eb; }
+.sort-arrow { font-size: 9px; margin-left: 4px; opacity: .55; }
+th.sortable.sorted .sort-arrow { opacity: 1; }
+
 /* 검색되는 선택 상자 (원래 select는 값만 들고 화면에서는 숨김) */
 .combo-source { display: none !important; }
 .combo { position: relative; }
@@ -418,10 +432,16 @@ header h2 { font-size: 16px; font-weight: 700; }
     <!-- 관리자: 고객사 관리 -->
     <div id="tab-companies" class="hidden">
       <div class="section-header">
-        <h3>고객사 관리</h3>
+        <h3>고객사 관리 <span class="list-count" id="companyCount"></span></h3>
         <button class="btn btn-primary btn-sm" onclick="openAddCompanyModal()">+ 고객사 추가</button>
       </div>
       <div class="info-box">💡 배송 할당 시 선택할 수 있는 고객사 목록을 관리합니다.</div>
+      <div class="list-search">
+        <input type="text" id="companySearch" autocomplete="off" oninput="renderCompanyTable()"
+               placeholder="🔍 고객사명 · 주소 · 담당자 · 연락처로 찾기">
+        <button type="button" class="list-search-clear hidden" id="companySearchClear"
+                onclick="clearCompanySearch()">✕</button>
+      </div>
       <div id="companyTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
 
@@ -1532,12 +1552,60 @@ async function deleteItem(id) {
 // ═══════════════════════════════════════════════════
 // 고객사 탭
 // ═══════════════════════════════════════════════════
+// 고객사 관리 탭: 불러온 원본을 들고 있다가 검색·정렬은 화면 안에서만 처리한다
+let companyTabList = [];
+let companySort = { key: 'name', asc: true };   // 서버가 이름순으로 주므로 기본값도 이름순
+
 async function loadCompanyTab() {
   document.getElementById('companyTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
-    const list = await api('GET', '/companies');
-    if (!list || list.length === 0) { document.getElementById('companyTableWrap').innerHTML = emptyMsg('등록된 고객사가 없습니다.'); return; }
-    const rows = list.map(c => `
+    companyTabList = await api('GET', '/companies') || [];
+    renderCompanyTable();   // 검색어는 유지 (수정·삭제 후 돌아와도 보던 화면 그대로)
+  } catch (e) { showToast('⚠️ 고객사 로딩 실패'); }
+}
+
+function clearCompanySearch() {
+  document.getElementById('companySearch').value = '';
+  renderCompanyTable();
+}
+
+function sortCompanies(key) {
+  if (companySort.key === key) companySort.asc = !companySort.asc;
+  else companySort = { key, asc: true };
+  renderCompanyTable();
+}
+
+function renderCompanyTable() {
+  const wrap = document.getElementById('companyTableWrap');
+  const input = document.getElementById('companySearch');
+  const q = (input.value || '').trim().toLowerCase();
+  document.getElementById('companySearchClear').classList.toggle('hidden', !q);
+
+  // 이름뿐 아니라 주소·담당자·연락처·메일·비고까지 훑는다
+  const hit = c => [c.name, c.address, c.contact_name, c.contact_phone, c.contact_email, c.notes]
+    .some(v => (v || '').toLowerCase().includes(q));
+  const list = (q ? companyTabList.filter(hit) : companyTabList.slice());
+
+  const { key, asc } = companySort;
+  list.sort((a, b) => {
+    if (key === 'id') return (a.id - b.id) * (asc ? 1 : -1);
+    const av = (a[key] || '').toString(), bv = (b[key] || '').toString();
+    if (!av !== !bv) return av ? -1 : 1;          // 비어있는 값은 방향과 무관하게 뒤로
+    return av.localeCompare(bv, 'ko') * (asc ? 1 : -1);
+  });
+
+  // 건수: 검색 중이면 '전체 중 몇 곳'인지 함께 보여 걸러진 상태임을 알린다
+  document.getElementById('companyCount').innerHTML = companyTabList.length === 0 ? ''
+    : (q ? `${companyTabList.length}곳 중 <b>${list.length}곳</b>`
+         : `전체 <b>${companyTabList.length}곳</b>`);
+
+  if (companyTabList.length === 0) { wrap.innerHTML = emptyMsg('등록된 고객사가 없습니다.'); return; }
+  if (list.length === 0) { wrap.innerHTML = emptyMsg(`'${escapeHtml(input.value.trim())}' 와 일치하는 고객사가 없습니다.`); return; }
+
+  const th = (k, label) => `<th class="sortable${companySort.key === k ? ' sorted' : ''}" onclick="sortCompanies('${k}')">`
+    + `${label}<span class="sort-arrow">${companySort.key === k ? (asc ? '▲' : '▼') : '↕'}</span></th>`;
+
+  const rows = list.map(c => `
       <tr>
         <td>${c.id}</td>
         <td><strong>${escapeHtml(c.name)}</strong></td>
@@ -1551,12 +1619,12 @@ async function loadCompanyTab() {
           <button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">삭제</button>
         </td>
       </tr>`).join('');
-    document.getElementById('companyTableWrap').innerHTML = `
+
+  wrap.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>ID</th><th>고객사명</th><th>주소</th><th>담당자</th><th>연락처</th><th>메일</th><th>비고</th><th>관리</th></tr></thead>
+        <thead><tr>${th('id','ID')}${th('name','고객사명')}${th('address','주소')}${th('contact_name','담당자')}<th>연락처</th><th>메일</th><th>비고</th><th>관리</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
-  } catch (e) { showToast('⚠️ 고객사 로딩 실패'); }
 }
 
 function openAddCompanyModal() {
