@@ -8,7 +8,7 @@ from typing import List, Optional
 KST = timezone(timedelta(hours=9))
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import models
@@ -630,6 +630,11 @@ async def upload_photos(
             detail=f"하차 상태에서만 계근표를 등록할 수 있습니다. (현재: {STATUS_LABELS.get(d.status, d.status)})",
         )
 
+    # 이번 등록의 회차 번호. 되돌린 뒤 다시 올리면 이전 사진은 그대로 두고 회차만 올린다.
+    last_batch = db.query(func.max(models.DeliveryPhoto.batch_no)).filter(
+        models.DeliveryPhoto.delivery_id == delivery_id).scalar()
+    batch_no = (last_batch or 0) + 1
+
     for file in files:
         contents = await file.read()
         mime = file.content_type or "image/jpeg"
@@ -642,6 +647,7 @@ async def upload_photos(
                 photo_data="",
                 drive_file_id=drive_id,
                 filename=fname,
+                batch_no=batch_no,
             ))
         else:
             photo_data = f"data:{mime};base64," + base64.b64encode(contents).decode()
@@ -649,6 +655,7 @@ async def upload_photos(
                 delivery_id=delivery_id,
                 photo_data=photo_data,
                 filename=fname,
+                batch_no=batch_no,
             ))
 
     # 계근표 등록 시각 기록 후 완료로 자동 전환

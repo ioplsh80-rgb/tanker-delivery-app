@@ -166,6 +166,19 @@ header h2 { font-size: 16px; font-weight: 700; }
 .card-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px; }
 .meta-label { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
 .meta-val { color: #374151; font-weight: 500; margin-top: 2px; }
+/* 계근표 이전 회차 사진 (접이식) */
+.batch-tag { margin-left: 8px; font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
+.old-photos { margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; }
+.old-photos > summary { cursor: pointer; padding: 8px 12px; font-size: 13px; color: #6b7280; font-weight: 600; list-style: none; }
+.old-photos > summary::-webkit-details-marker { display: none; }
+.old-photos > summary::before { content: '▸ '; }
+.old-photos[open] > summary::before { content: '▾ '; }
+.old-photos-body { padding: 0 12px 12px; }
+.old-photos-hint { font-size: 12px; color: #9ca3af; margin-bottom: 10px; }
+.old-batch + .old-batch { margin-top: 12px; }
+.old-batch-label { font-size: 12px; color: #6b7280; font-weight: 600; margin-bottom: 6px; }
+.old-batch .photo-thumb img { opacity: .6; }
+
 /* 요약 카드의 특이사항: 한 줄 전체를 쓰고 입력한 줄바꿈 그대로 전부 표시 */
 .card-note { grid-column: 1 / -1; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; }
 .card-note .meta-label { color: #b45309; }
@@ -1077,6 +1090,7 @@ let drivers = [];
 let itemsList = [];
 let companiesList = [];
 let photoFiles = [];
+let photoPreviewUrls = [];   // 미리보기용 임시 URL (다시 그릴 때 해제)
 let currentActionId = null;
 let currentTab = '';
 let deliveriesCache = {};
@@ -2303,6 +2317,16 @@ async function runStageAck(deliveryId, stage, proceed) {
   });
 }
 
+// 계근표 사진의 등록 회차 (batch_no 없이 저장된 예전 사진은 1회차로 취급)
+function photoBatch(p) { return p.batch_no || 1; }
+
+function photoGrid(list) {
+  return `<div class="photo-preview-grid">${list.map(p => {
+    const src = p.drive_file_id ? `/api/photos/${p.drive_file_id}` : p.photo_data;
+    return `<div class="photo-thumb"><img src="${src}" onclick="viewPhoto('${src}', ${p.drive_file_id ? `'${p.drive_file_id}'` : 'null'})"></div>`;
+  }).join('')}</div>`;
+}
+
 function renderDetail(d) {
   const steps = FLOW_STEPS;
   const stepLabels = FLOW_LABELS;
@@ -2313,14 +2337,31 @@ function renderDetail(d) {
     return `<span class="status-step ${cls}">${stepLabels[i]}</span>${i < steps.length - 1 ? '<span class="s-arrow">▶</span>' : ''}`;
   }).join('');
 
-  const photosHTML = d.photos && d.photos.length
-    ? `<div class="photo-preview-grid">${d.photos.map(p => {
-        const src = p.drive_file_id
-          ? `/api/photos/${p.drive_file_id}`
-          : p.photo_data;
-        return `<div class="photo-thumb"><img src="${src}" onclick="viewPhoto('${src}', ${p.drive_file_id ? `'${p.drive_file_id}'` : 'null'})"></div>`;
-      }).join('')}</div>`
-    : '<p style="font-size:13px;color:#9ca3af;">첨부된 사진 없음</p>';
+  // 계근표는 되돌린 뒤 다시 올려도 이전 사진을 지우지 않는다(증빙 보존).
+  // 최신 회차만 펼쳐 보이고, 이전 회차는 접어둔다.
+  const allPhotos = d.photos || [];
+  const latestBatch = allPhotos.length ? Math.max(...allPhotos.map(photoBatch)) : 1;
+  const latestPhotos = allPhotos.filter(p => photoBatch(p) === latestBatch);
+  const olderPhotos = allPhotos.filter(p => photoBatch(p) !== latestBatch);
+  const olderBatches = [...new Set(olderPhotos.map(photoBatch))].sort((a, b) => b - a);
+
+  const photosHTML = (latestPhotos.length
+      ? photoGrid(latestPhotos)
+      : '<p style="font-size:13px;color:#9ca3af;">첨부된 사진 없음</p>')
+    + (olderPhotos.length ? `
+      <details class="old-photos">
+        <summary>🕘 이전에 등록한 사진 ${olderPhotos.length}장 보기</summary>
+        <div class="old-photos-body">
+          <p class="old-photos-hint">계근표를 다시 등록하기 전에 올렸던 사진입니다. 기록 보존을 위해 남겨둡니다.</p>
+          ${olderBatches.map(b => {
+            const list = olderPhotos.filter(p => photoBatch(p) === b);
+            return `<div class="old-batch">
+              <div class="old-batch-label">${b}회차 등록 · ${list.length}장${list[0] && list[0].uploaded_at ? ` · ${formatChatTime(list[0].uploaded_at)}` : ''}</div>
+              ${photoGrid(list)}
+            </div>`;
+          }).join('')}
+        </div>
+      </details>` : '');
 
   // 주의사항 - 접이식 표시 (클릭하면 펼쳐짐)
   const matchedCompany = companiesList.find(c => c.name === d.company);
@@ -2388,7 +2429,7 @@ function renderDetail(d) {
     </div>
 
     <div class="detail-section">
-      <h4>계근표 사진 (${d.photos ? d.photos.length : 0}장)</h4>
+      <h4>계근표 사진 (${latestPhotos.length}장)${latestBatch > 1 ? `<span class="batch-tag">${latestBatch}회차 등록</span>` : ''}</h4>
       ${photosHTML}
       ${d.complete_memo ? `<p style="font-size:13px;color:#374151;margin-top:10px;">📝 ${escapeHtml(d.complete_memo)}</p>` : ''}
     </div>
@@ -2679,32 +2720,35 @@ async function submitEditDelivery() {
 function openPhotoModal(id) {
   currentActionId = id;
   photoFiles = [];
-  document.getElementById('photoPreviewGrid').innerHTML = '';
+  renderPhotoPreview();
   document.getElementById('completeMemo').value = '';
   document.getElementById('photoInput').value = '';
   document.getElementById('photoModal').classList.remove('hidden');
 }
 
 function previewPhotos(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    photoFiles.push(file);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const grid = document.getElementById('photoPreviewGrid');
-      const idx = photoFiles.length - 1;
-      const div = document.createElement('div');
-      div.className = 'photo-thumb';
-      div.innerHTML = `<img src="${ev.target.result}"><button class="del-photo" onclick="removePhoto(${idx}, this)">✕</button>`;
-      grid.appendChild(div);
-    };
-    reader.readAsDataURL(file);
-  });
+  Array.from(e.target.files).forEach(file => photoFiles.push(file));
+  e.target.value = '';   // 같은 사진을 다시 고를 수 있도록 비움
+  renderPhotoPreview();
 }
 
-function removePhoto(idx, btn) {
+// 목록이 바뀔 때마다 전체를 다시 그린다.
+// (예전에는 썸네일마다 만들 때의 번호를 기억해 두었는데, 사진을 빼면 뒤 번호가
+//  밀려서 엉뚱한 사진이 지워졌다. 매번 다시 그려 번호를 새로 매긴다.)
+function renderPhotoPreview() {
+  const grid = document.getElementById('photoPreviewGrid');
+  photoPreviewUrls.forEach(u => URL.revokeObjectURL(u));
+  photoPreviewUrls = [];
+  grid.innerHTML = photoFiles.map((file, i) => {
+    const url = URL.createObjectURL(file);
+    photoPreviewUrls.push(url);
+    return `<div class="photo-thumb"><img src="${url}"><button class="del-photo" onclick="removePhoto(${i})">✕</button></div>`;
+  }).join('');
+}
+
+function removePhoto(idx) {
   photoFiles.splice(idx, 1);
-  btn.closest('.photo-thumb').remove();
+  renderPhotoPreview();
 }
 
 async function submitComplete() {

@@ -38,6 +38,7 @@ migrations = [
     ("delivery_notice_acks", "stage", "VARCHAR(10)"),
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
+    ("delivery_photos", "batch_no",      "INTEGER DEFAULT 1"),
 ]
 
 with engine.connect() as conn:

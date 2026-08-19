@@ -195,6 +195,7 @@ class PhotoResponse(BaseModel):
     drive_file_id: Optional[str] = None
     filename: Optional[str]
     uploaded_at: datetime
+    batch_no: Optional[int] = 1  # 계근표 등록 회차 (기존 사진은 1)
 
     class Config:
         from_attributes = True

@@ -209,5 +209,8 @@ class DeliveryPhoto(Base):
     drive_file_id = Column(String(200))                    # Google Drive 파일 ID
     filename = Column(String(200))
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+    # 계근표 등록 회차. 되돌린 뒤 다시 올리면 2, 3...으로 올라간다.
+    # 화면에는 최신 회차만 펼쳐 보이고 이전 회차는 접어둔다 (증빙이라 지우지 않음).
+    batch_no = Column(Integer, nullable=False, default=1)
 
     delivery = relationship("Delivery", back_populates="photos")
