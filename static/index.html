@@ -166,6 +166,19 @@ header h2 { font-size: 16px; font-weight: 700; }
 .card-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px; }
 .meta-label { font-size: 11px; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
 .meta-val { color: #374151; font-weight: 500; margin-top: 2px; }
+/* 검색되는 선택 상자 (원래 select는 값만 들고 화면에서는 숨김) */
+.combo-source { display: none !important; }
+.combo { position: relative; }
+.combo-input { width: 100%; padding: 10px 34px 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff; }
+.combo-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+.combo-caret { position: absolute; top: 0; right: 0; height: 100%; width: 32px; border: none; background: none; color: #6b7280; font-size: 12px; cursor: pointer; }
+.combo-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+.combo-item { padding: 10px 12px; font-size: 14px; color: #374151; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.combo-item + .combo-item { border-top: 1px solid #f3f4f6; }
+.combo-item:hover, .combo-item.active { background: #eff6ff; color: #1d4ed8; }
+.combo-sub { font-size: 12px; color: #9ca3af; flex-shrink: 0; }
+.combo-empty { padding: 12px; font-size: 13px; color: #9ca3af; text-align: center; }
+
 /* 계근표 이전 회차 사진 (접이식) */
 .batch-tag { margin-left: 8px; font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
 .old-photos { margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; }
@@ -2518,11 +2531,122 @@ function onEditCompanyChange() {
   if (address) document.getElementById('ed-dest').value = address;
 }
 
+// ═══════════════════════════════════════════════════
+// 검색되는 선택 상자
+// 기존 <select>를 값의 주인으로 그대로 두고 그 위에 입력칸을 얹는다.
+// 덕분에 값을 읽고 쓰는 기존 코드(.value, onchange)는 그대로 동작한다.
+// 목록에 없는 값은 고를 수 없다 - 직접 친 글자는 칸을 벗어날 때 되돌린다.
+// ═══════════════════════════════════════════════════
+function attachCombo(selectId, placeholder) {
+  const sel = document.getElementById(selectId);
+  if (!sel || sel.dataset.comboAttached) return;
+  sel.dataset.comboAttached = '1';
+  sel.classList.add('combo-source');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'combo';
+  wrap.innerHTML = `<input type="text" class="combo-input" autocomplete="off" placeholder="${escapeHtml(placeholder || '')}">`
+    + `<button type="button" class="combo-caret" tabindex="-1">▾</button>`
+    + `<div class="combo-list hidden"></div>`;
+  sel.parentNode.insertBefore(wrap, sel.nextSibling);
+
+  const input = wrap.querySelector('.combo-input');
+  const caret = wrap.querySelector('.combo-caret');
+  const list  = wrap.querySelector('.combo-list');
+  let items = [];
+  let activeIdx = -1;
+
+  // 값이 빈 '선택하세요'는 후보에서 제외
+  const options = () => Array.from(sel.options).filter(o => o.value !== '');
+  const currentLabel = () => {
+    const o = sel.options[sel.selectedIndex];
+    return o && o.value !== '' ? o.textContent : '';
+  };
+  const sync = () => { input.value = currentLabel(); };
+  sel._comboSync = sync;   // 값이 코드로 바뀐 뒤 refreshCombo()로 호출
+
+  function highlight() {
+    list.querySelectorAll('.combo-item').forEach((el, i) =>
+      el.classList.toggle('active', i === activeIdx));
+    const el = list.querySelector('.combo-item.active');
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }
+
+  function open(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    // 포함되어 있으면 위치와 상관없이 모두 표시 ('삼성' → 'OO삼성전자'도 나옴)
+    items = options().filter(o => !q ||
+      (o.textContent + ' ' + (o.dataset.search || '')).toLowerCase().includes(q));
+    activeIdx = -1;
+    list.innerHTML = items.length
+      ? items.map((o, i) => `<div class="combo-item" data-i="${i}">${escapeHtml(o.textContent)}`
+          + (o.dataset.search ? `<span class="combo-sub">${escapeHtml(o.dataset.search)}</span>` : '')
+          + `</div>`).join('')
+      : `<div class="combo-empty">일치하는 항목이 없습니다</div>`;
+    list.classList.remove('hidden');
+  }
+
+  function close() { list.classList.add('hidden'); sync(); }
+
+  function pick(i) {
+    const o = items[i];
+    if (!o) return;
+    sel.value = o.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));   // 기존 onchange 유지
+    close();
+  }
+
+  input.addEventListener('focus', () => open(''));      // 누르면 전체 목록 (드롭박스처럼)
+  input.addEventListener('input', () => open(input.value));
+  input.addEventListener('blur', close);                // 목록에 없는 글자는 여기서 되돌아감
+  caret.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (list.classList.contains('hidden')) { input.focus(); open(''); } else { close(); }
+  });
+  // mousedown에서 처리해야 blur로 목록이 닫히기 전에 선택된다
+  list.addEventListener('mousedown', e => {
+    const el = e.target.closest('.combo-item');
+    if (!el) return;
+    e.preventDefault();
+    pick(parseInt(el.dataset.i, 10));
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (list.classList.contains('hidden')) return open(input.value);
+      if (!items.length) return;
+      activeIdx = e.key === 'ArrowDown'
+        ? Math.min(activeIdx + 1, items.length - 1)
+        : Math.max(activeIdx - 1, 0);
+      highlight();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx >= 0) pick(activeIdx);
+      else if (items.length === 1) pick(0);
+    } else if (e.key === 'Escape') {
+      close(); input.blur();
+    }
+  });
+
+  sync();
+}
+
+// 코드에서 선택값을 바꾼 뒤(모달 열기 등) 입력칸 표시를 맞춘다
+function refreshCombo(selectId) {
+  const sel = document.getElementById(selectId);
+  if (sel && sel._comboSync) sel._comboSync();
+}
+
+attachCombo('f-company',  '업체명 입력 또는 선택');
+attachCombo('ed-company', '업체명 입력 또는 선택');
+attachCombo('av-driver',  '기사명·차량번호 입력 또는 선택');
+
 function openAssignModal() {
   const today = new Date().toISOString().slice(0, 10);
   ['f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-type').value = '출하';
   document.getElementById('f-company').value = '';
+  refreshCombo('f-company');
   document.getElementById('f-item').value = '';
   document.getElementById('f-qty').value = '';
   document.getElementById('f-date').value = today;
@@ -2623,8 +2747,9 @@ function openAssignVehicleModal(id) {
     `<b>D${String(id).padStart(3,'0')}</b> · ${escapeHtml(d.company||'')} → ${escapeHtml(d.destination||'')}<br>` +
     `${escapeHtml(d.scheduled_date||'')} ${escapeHtml(d.delivery_time||'')} · ${escapeHtml(d.item_name||'')} ${Number(d.quantity||0).toLocaleString()}Kg`;
   const driverSel = document.getElementById('av-driver');
+  // data-search: 이름 외에 차량번호로도 찾을 수 있게 (목록에 보이는 이름은 그대로)
   driverSel.innerHTML = '<option value="">선택하세요</option>' +
-    drivers.map(dr => `<option value="${dr.id}">${escapeHtml(dr.name)}</option>`).join('');
+    drivers.map(dr => `<option value="${dr.id}" data-search="${escapeHtml(dr.vehicle_number || '')}">${escapeHtml(dr.name)}</option>`).join('');
   const updateVehicleInfo = (driverId) => {
     const infoEl = document.getElementById('av-vehicle-info');
     const textEl = document.getElementById('av-vehicle-text');
@@ -2637,6 +2762,8 @@ function openAssignVehicleModal(id) {
     }
   };
   if (d.driver_id) { driverSel.value = d.driver_id; updateVehicleInfo(d.driver_id); }
+  else { driverSel.value = ''; }
+  refreshCombo('av-driver');
   driverSel.onchange = function() { updateVehicleInfo(this.value); };
   document.getElementById('assignVehicleModal').classList.remove('hidden');
 }
@@ -2677,6 +2804,7 @@ function openEditDeliveryModal(id) {
   cSel.innerHTML = '<option value="">선택하세요</option>' +
     companiesList.map(c => `<option value="${c.name}" data-address="${c.address||''}">${c.name}</option>`).join('');
   cSel.value = d.company || '';
+  refreshCombo('ed-company');
   const iSel = document.getElementById('ed-item');
   iSel.innerHTML = '<option value="">선택하세요</option>' +
     itemsList.map(it => `<option value="${it.name}">${it.name}</option>`).join('');
