@@ -191,6 +191,12 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
 .combo-item + .combo-item { border-top: 1px solid #f3f4f6; }
 .combo-item:hover, .combo-item.active { background: #eff6ff; color: #1d4ed8; }
 .combo-sub { font-size: 12px; color: #9ca3af; flex-shrink: 0; }
+.combo-item-all { color: #6b7280; font-style: italic; }
+/* 필터 막대 안에서는 옆의 다른 선택 상자와 같은 크기로 */
+.filter-bar .combo { min-width: 170px; }
+.filter-bar .combo-input { padding: 8px 30px 8px 12px; border: 1.5px solid #d1d5db; font-size: 13px; }
+.filter-bar .combo-input:focus { border-color: #2563eb; box-shadow: none; }
+.filter-bar .combo-caret { width: 28px; }
 .combo-empty { padding: 12px; font-size: 13px; color: #9ca3af; text-align: center; }
 
 /* 계근표 이전 회차 사진 (접이식) */
@@ -397,6 +403,9 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
           <option value="">출하·입하 전체</option>
           <option value="출하">출하</option>
           <option value="입하">입하</option>
+        </select>
+        <select id="filterCompany" onchange="loadDeliveries()">
+          <option value="">전체 고객사</option>
         </select>
         <select id="filterDriver" onchange="loadDeliveries()">
           <option value="">전체 기사</option>
@@ -1351,9 +1360,18 @@ async function loadItems() {
 async function loadCompanies() {
   try {
     companiesList = await api('GET', '/companies');
+    const opts = companiesList.map(c =>
+      `<option value="${escapeHtml(c.name)}" data-address="${escapeHtml(c.address||'')}">${escapeHtml(c.name)}</option>`).join('');
     const sel = document.getElementById('f-company');
-    sel.innerHTML = '<option value="">선택하세요</option>' +
-      companiesList.map(c => `<option value="${escapeHtml(c.name)}" data-address="${escapeHtml(c.address||'')}">${escapeHtml(c.name)}</option>`).join('');
+    sel.innerHTML = '<option value="">선택하세요</option>' + opts;
+    // 배송 목록의 고객사 필터도 같은 목록을 쓴다 (선택해 둔 값은 유지)
+    const fc = document.getElementById('filterCompany');
+    if (fc) {
+      const keep = fc.value;
+      fc.innerHTML = '<option value="">전체 고객사</option>' + opts;
+      fc.value = keep;
+      refreshCombo('filterCompany');
+    }
   } catch (e) { console.error(e); }
 }
 
@@ -1949,12 +1967,14 @@ function loadDriverFilterOptions() {
 async function loadDeliveries() {
   const status   = document.getElementById('filterStatus').value;
   const type     = document.getElementById('filterType').value;
+  const company  = document.getElementById('filterCompany').value;
   const driverId = document.getElementById('filterDriver').value;
   const dateFrom = document.getElementById('filterDateFrom').value;
   const dateTo   = document.getElementById('filterDateTo').value;
   let qs = new URLSearchParams();
   if (status)   qs.append('status', status);
   if (type)     qs.append('delivery_type', type);
+  if (company)  qs.append('company', company);
   if (driverId) qs.append('driver_id', driverId);
   if (dateFrom) qs.append('date_from', dateFrom);
   if (dateTo)   qs.append('date_to', dateTo);
@@ -2612,7 +2632,9 @@ function onEditCompanyChange() {
 // 덕분에 값을 읽고 쓰는 기존 코드(.value, onchange)는 그대로 동작한다.
 // 목록에 없는 값은 고를 수 없다 - 직접 친 글자는 칸을 벗어날 때 되돌린다.
 // ═══════════════════════════════════════════════════
-function attachCombo(selectId, placeholder) {
+// opts.includeEmpty: 값이 빈 항목('전체 ○○')도 고를 수 있게 한다. 필터용.
+function attachCombo(selectId, placeholder, opts) {
+  const includeEmpty = !!(opts && opts.includeEmpty);
   const sel = document.getElementById(selectId);
   if (!sel || sel.dataset.comboAttached) return;
   sel.dataset.comboAttached = '1';
@@ -2631,8 +2653,8 @@ function attachCombo(selectId, placeholder) {
   let items = [];
   let activeIdx = -1;
 
-  // 값이 빈 '선택하세요'는 후보에서 제외
-  const options = () => Array.from(sel.options).filter(o => o.value !== '');
+  // 값이 빈 '선택하세요'는 후보에서 제외 (필터에서는 '전체'로 쓰이므로 포함)
+  const options = () => Array.from(sel.options).filter(o => includeEmpty || o.value !== '');
   const currentLabel = () => {
     const o = sel.options[sel.selectedIndex];
     return o && o.value !== '' ? o.textContent : '';
@@ -2654,7 +2676,7 @@ function attachCombo(selectId, placeholder) {
       (o.textContent + ' ' + (o.dataset.search || '')).toLowerCase().includes(q));
     activeIdx = -1;
     list.innerHTML = items.length
-      ? items.map((o, i) => `<div class="combo-item" data-i="${i}">${escapeHtml(o.textContent)}`
+      ? items.map((o, i) => `<div class="combo-item${o.value === '' ? ' combo-item-all' : ''}" data-i="${i}">${escapeHtml(o.textContent)}`
           + (o.dataset.search ? `<span class="combo-sub">${escapeHtml(o.dataset.search)}</span>` : '')
           + `</div>`).join('')
       : `<div class="combo-empty">일치하는 항목이 없습니다</div>`;
@@ -2715,6 +2737,7 @@ function refreshCombo(selectId) {
 attachCombo('f-company',  '업체명 입력 또는 선택');
 attachCombo('ed-company', '업체명 입력 또는 선택');
 attachCombo('av-driver',  '기사명·차량번호 입력 또는 선택');
+attachCombo('filterCompany', '전체 고객사', { includeEmpty: true });
 
 function openAssignModal() {
   const today = new Date().toISOString().slice(0, 10);
@@ -3097,12 +3120,14 @@ async function submitAddUser() {
 async function downloadExcel() {
   const status   = document.getElementById('filterStatus')?.value || '';
   const type     = document.getElementById('filterType')?.value || '';
+  const company  = document.getElementById('filterCompany')?.value || '';
   const driverId = document.getElementById('filterDriver')?.value || '';
   const dateFrom = document.getElementById('filterDateFrom')?.value || '';
   const dateTo   = document.getElementById('filterDateTo')?.value || '';
   let qs = new URLSearchParams();
   if (status)   qs.append('status', status);
   if (type)     qs.append('delivery_type', type);   // 화면에 걸린 필터 그대로 내려받도록
+  if (company)  qs.append('company', company);
   if (driverId) qs.append('driver_id', driverId);
   if (dateFrom) qs.append('date_from', dateFrom);
   if (dateTo)   qs.append('date_to', dateTo);

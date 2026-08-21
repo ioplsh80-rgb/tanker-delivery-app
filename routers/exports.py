@@ -38,12 +38,15 @@ def export_excel(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     delivery_type: Optional[str] = None,
+    company: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     query = _apply_visibility_filter(db.query(models.Delivery), db, current_user)
     if status:
         query = query.filter(models.Delivery.status == status)
+    if company:
+        query = query.filter(models.Delivery.company == company)
     if delivery_type:
         # 화면 목록과 같은 기준으로 거른다 (빈 값은 출하로 취급)
         if delivery_type == "출하":

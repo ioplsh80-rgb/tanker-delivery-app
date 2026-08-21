@@ -173,6 +173,7 @@ def get_deliveries(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     delivery_type: Optional[str] = None,
+    company: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -180,6 +181,9 @@ def get_deliveries(
 
     if current_user.role != "driver" and driver_id:
         query = query.filter(models.Delivery.driver_id == driver_id)
+
+    if company:
+        query = query.filter(models.Delivery.company == company)
 
     if status:
         query = query.filter(models.Delivery.status == status)
