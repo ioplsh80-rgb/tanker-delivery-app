@@ -40,6 +40,7 @@ migrations = [
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
     ("delivery_photos", "batch_no",      "INTEGER DEFAULT 1"),
     ("delivery_photos", "drive_renamed", "BOOLEAN DEFAULT FALSE"),
+    ("delivery_messages", "drive_renamed", "BOOLEAN DEFAULT FALSE"),
 ]
 
 with engine.connect() as conn:

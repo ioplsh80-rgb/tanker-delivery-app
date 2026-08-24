@@ -81,6 +81,32 @@ def weighing_photo_folders(company: Optional[str]) -> List[str]:
     return ["완료", _clean_name_part(company, "고객사미상")]
 
 
+def chat_photo_name(d, uploader_name: Optional[str], uploaded_kst: datetime,
+                    original_filename: Optional[str]) -> str:
+    """대화 사진의 드라이브 파일 이름.
+    배송번호_올린사람_고객사_배송날짜_올린시각(초까지)_대화.확장자
+
+    계근표와 달리 한 장씩 따로 올라와 순번을 매길 수 없어, 같은 분에 여러 장을
+    보내도 겹치지 않도록 초까지 넣는다. 품목은 현장 사진에 쓸모가 적어 뺀다."""
+    ext = os.path.splitext(original_filename or "")[1].lower()
+    if not re.fullmatch(r"\.[a-z0-9]{1,5}", ext or ""):
+        ext = ".jpg"
+    parts = [
+        f"D{d.id:03d}",
+        _clean_name_part(uploader_name, "미상"),
+        _clean_name_part(d.company, "고객사미상"),
+        (d.scheduled_date or "").replace("-", "") or "날짜미상",
+        uploaded_kst.strftime("%H%M%S"),
+        "대화",
+    ]
+    return "_".join(parts) + ext
+
+
+def chat_photo_folders(company: Optional[str]) -> List[str]:
+    """대화 사진 저장 위치: 기본 폴더 / 대화 / 고객사"""
+    return ["대화", _clean_name_part(company, "고객사미상")]
+
+
 def _ensure_folder(service, parent_id: str, name: str) -> str:
     """parent_id 아래에 name 폴더를 찾고, 없으면 만들어 ID를 돌려준다."""
     safe = name.replace("\\", "\\\\").replace("'", "\\'")
@@ -318,9 +344,6 @@ def update_viewers(
 
 
 # ── 배송카드 대화 ──────────────────────────────────────
-CHAT_PHOTO_SUBFOLDER = "배송대화_사진"
-
-
 def _get_delivery_for_chat(delivery_id: int, db: Session, current_user: models.User) -> models.Delivery:
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
@@ -443,13 +466,16 @@ async def send_photo_message(
     d = _get_delivery_for_chat(delivery_id, db, current_user)
     contents = await file.read()
     mime = file.content_type or "image/jpeg"
-    fname = f"chat_D{delivery_id}_{file.filename or 'photo.jpg'}"
-    drive_id = _upload_to_drive(contents, fname, mime, subfolder=CHAT_PHOTO_SUBFOLDER)
+    # 올린 사람 이름을 쓴다 (기사든 관리자든)
+    drive_name = chat_photo_name(d, current_user.name, datetime.now(KST), file.filename)
+    drive_id = _upload_to_drive(contents, drive_name, mime,
+                                subfolder=chat_photo_folders(d.company))
     if not drive_id:
         raise HTTPException(status_code=500, detail="사진 업로드에 실패했습니다.")
     m = models.DeliveryMessage(
         delivery_id=delivery_id, user_id=current_user.id,
         content=(content or "").strip(), drive_file_id=drive_id,
+        drive_renamed=True,
     )
     db.add(m)
     _mark_read(delivery_id, db, current_user)

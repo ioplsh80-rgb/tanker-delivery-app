@@ -160,6 +160,8 @@ class DeliveryMessage(Base):
     content = Column(Text, default="")                    # 텍스트 (사진만 보낼 경우 빈 문자열)
     drive_file_id = Column(String(200))                   # 첨부 사진 Google Drive 파일 ID
     created_at = Column(DateTime, default=datetime.utcnow)
+    # 드라이브 파일 이름·폴더를 새 규칙으로 정리했는지 (기존 사진 일괄 정리의 진행 표시)
+    drive_renamed = Column(Boolean, default=False)
 
     user = relationship("User")
 
