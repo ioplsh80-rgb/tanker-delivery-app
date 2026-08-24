@@ -213,7 +213,9 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
 .dtable .stick { position: sticky; z-index: 1; }
 .dtable th.stick { z-index: 3; }
 .dtable .c1 { left: 0; min-width: 64px; }
-.dtable .c2 { left: 64px; min-width: 132px; box-shadow: 2px 0 4px -2px rgba(0,0,0,.15); }
+/* 번호 칸 폭은 자릿수에 따라 달라지므로(D042 → D12345) 실제 폭을 재서 넣는다.
+   고정값을 쓰면 번호가 길어질 때 업체명 칸이 번호 위로 겹쳐 올라온다. */
+.dtable .c2 { left: var(--c1w, 64px); min-width: 132px; box-shadow: 2px 0 4px -2px rgba(0,0,0,.15); }
 .dtable .num { font-weight: 700; color: #1e3a5f; }
 .dtable .right { text-align: right; }
 .dtable .muted { color: #9ca3af; }
@@ -2278,7 +2280,18 @@ function renderDeliveryTab() {
   box.innerHTML = deliveryView === 'table'
     ? deliveryTableHTML(sortedDeliveryList())
     : renderDeliveryCards(deliveryTabList, 'admin');
+  if (deliveryView === 'table') syncStickyOffset();
 }
+
+// 왼쪽에 고정한 두 칸이 겹치지 않도록, 업체명 칸을 붙일 위치를 번호 칸의
+// 실제 폭으로 맞춘다. 글꼴·자릿수가 달라져도 스스로 따라간다.
+function syncStickyOffset() {
+  const wrap = document.querySelector('.dtable-wrap');
+  const head = wrap && wrap.querySelector('th.c1');
+  if (!head) return;
+  wrap.style.setProperty('--c1w', Math.ceil(head.getBoundingClientRect().width) + 'px');
+}
+window.addEventListener('resize', () => { if (deliveryView === 'table') syncStickyOffset(); });
 
 // ═══════════════════════════════════════════════════
 // 기사 현황
