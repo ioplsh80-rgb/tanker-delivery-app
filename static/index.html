@@ -1093,10 +1093,17 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         <label>비고</label>
         <textarea id="c-notes" rows="4" placeholder="메모 (여러 줄 입력 가능)"></textarea>
       </div>
+      <div class="form-group" style="border-top:1px solid #e5e7eb;margin-top:16px;padding-top:16px;">
+        <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-weight:600;">⚠️ 주의사항 <span id="c-notice-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></span>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;" onclick="addNewCompanyNoticeRow()">+ 추가</button>
+        </label>
+        <div id="c-notice-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('addCompanyModal')">취소</button>
-      <button class="btn btn-primary" onclick="submitAddCompany()">추가</button>
+      <button class="btn btn-primary" id="addCompanyBtn" onclick="submitAddCompany()">추가</button>
     </div>
   </div>
 </div>
@@ -1721,6 +1728,8 @@ function renderCompanyTable() {
 
 function openAddCompanyModal() {
   ['c-name','c-address','c-contact-name','c-contact-phone','c-contact-email','c-notes'].forEach(id => document.getElementById(id).value = '');
+  clearNewCompanyNotices();
+  renderNewCompanyNotices();
   document.getElementById('addCompanyModal').classList.remove('hidden');
 }
 
@@ -1907,6 +1916,81 @@ function addNoticeRow() {
   document.getElementById('notice-new-text').focus();
 }
 
+// ── 고객사를 추가할 때의 주의사항 ─────────────────────
+// 수정 화면에서는 주의사항 한 줄마다 바로 서버에 저장하지만, 추가 화면에는
+// 아직 고객사가 없어 붙일 곳이 없다. 그래서 화면에 모아두었다가 고객사를
+// 만든 직후에 한꺼번에 등록한다.
+let newCompanyNotices = [];        // [{ content, file, previewUrl }]
+
+function clearNewCompanyNotices() {
+  newCompanyNotices.forEach(n => { if (n.previewUrl) URL.revokeObjectURL(n.previewUrl); });
+  newCompanyNotices = [];
+}
+
+function addNewCompanyNoticeRow() {
+  if (newCompanyNotices.length >= 10) { showToast('⚠️ 주의사항은 최대 10개까지 등록할 수 있습니다.'); return; }
+  newCompanyNotices.push({ content: '', file: null, previewUrl: null });
+  renderNewCompanyNotices();
+  const boxes = document.querySelectorAll('#c-notice-list .notice-input');
+  if (boxes.length) boxes[boxes.length - 1].focus();
+}
+
+function removeNewCompanyNotice(i) {
+  const n = newCompanyNotices[i];
+  if (n && n.previewUrl) URL.revokeObjectURL(n.previewUrl);
+  newCompanyNotices.splice(i, 1);
+  renderNewCompanyNotices();
+}
+
+// 글자를 칠 때마다 다시 그리면 입력칸에서 커서가 빠져나가므로 값만 담아둔다
+function setNewCompanyNoticeText(i, v) { if (newCompanyNotices[i]) newCompanyNotices[i].content = v; }
+
+function pickNewCompanyNoticePhoto(input, i) {
+  if (!input.files || !input.files[0]) return;
+  const n = newCompanyNotices[i];
+  if (!n) return;
+  if (n.previewUrl) URL.revokeObjectURL(n.previewUrl);
+  n.file = input.files[0];
+  n.previewUrl = URL.createObjectURL(n.file);
+  renderNewCompanyNotices();
+}
+
+function removeNewCompanyNoticePhoto(i) {
+  const n = newCompanyNotices[i];
+  if (!n) return;
+  if (n.previewUrl) URL.revokeObjectURL(n.previewUrl);
+  n.file = null; n.previewUrl = null;
+  renderNewCompanyNotices();
+}
+
+function renderNewCompanyNotices() {
+  const list = document.getElementById('c-notice-list');
+  if (!list) return;
+  document.getElementById('c-notice-count').textContent = '(' + newCompanyNotices.length + '/10)';
+  if (newCompanyNotices.length === 0) {
+    list.innerHTML = '<div style="color:#9ca3af;font-size:13px;">등록된 주의사항이 없습니다. 지금 넣어두면 고객사를 만들 때 같이 등록됩니다.</div>';
+    return;
+  }
+  const nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+  list.innerHTML = newCompanyNotices.map((n, i) => `
+    <div class="notice-item">
+      <div class="notice-item-row">
+        <span class="notice-num">${nums[i] || (i + 1)}</span>
+        <textarea class="notice-input" rows="2" placeholder="주의사항 내용을 입력하세요 (여러 줄 가능)"
+                  oninput="setNewCompanyNoticeText(${i}, this.value)">${escapeHtml(n.content || '')}</textarea>
+        <label class="btn btn-sm btn-outline" style="cursor:pointer;padding:4px 8px;" title="사진 첨부">
+          📎<input type="file" accept="image/*" style="display:none" onchange="pickNewCompanyNoticePhoto(this, ${i})">
+        </label>
+        <button class="btn btn-sm btn-danger" onclick="removeNewCompanyNotice(${i})">🗑️</button>
+      </div>
+      ${n.previewUrl ? `<div style="margin-left:30px;display:flex;align-items:center;gap:8px;">
+        <img class="notice-photo-preview" src="${n.previewUrl}">
+        <button class="btn btn-sm btn-gray" onclick="removeNewCompanyNoticePhoto(${i})">사진 빼기</button>
+      </div>` : ''}
+    </div>`).join('');
+}
+
+
 async function saveNewNotice(companyId) {
   const content = document.getElementById('notice-new-text').value.trim();
   if(!content) { showToast('⚠️ 내용을 입력해주세요.'); return; }
@@ -1990,13 +2074,42 @@ async function submitAddCompany() {
   const contactEmail = document.getElementById('c-contact-email').value.trim();
   const notes        = document.getElementById('c-notes').value.trim();
   if (!name) { showToast('⚠️ 고객사명을 입력해주세요.'); return; }
+  const pending = newCompanyNotices.filter(n => (n.content || '').trim());
+  const btn = document.getElementById('addCompanyBtn');
+  btn.disabled = true; btn.textContent = '저장 중...';
   try {
-    await api('POST', '/companies', { name, address: address||null, contact_name: contactName||null, contact_phone: contactPhone||null, contact_email: contactEmail||null, notes: notes||null });
+    const created = await api('POST', '/companies', { name, address: address||null, contact_name: contactName||null, contact_phone: contactPhone||null, contact_email: contactEmail||null, notes: notes||null });
+    // 고객사가 생긴 뒤에야 주의사항을 붙일 수 있다.
+    // 고객사는 이미 만들어졌으므로, 일부가 실패해도 되돌리지 않고 몇 개가
+    // 안 들어갔는지 알려준다. 나머지는 '수정'에서 채우면 된다.
+    // 글이 안 들어간 것과 사진만 안 올라간 것은 사용자가 할 일이 달라 따로 센다
+    let failedText = 0, failedPhoto = 0;
+    for (const n of pending) {
+      let saved = null;
+      try {
+        saved = await api('POST', `/companies/${created.id}/notices`, { content: n.content.trim() });
+      } catch (e) { failedText++; continue; }
+      if (n.file && saved && saved.id) {
+        try {
+          const fd = new FormData();
+          fd.append('file', n.file);
+          const res = await fetch(`/api/companies/${created.id}/notices/${saved.id}/photo`, { method: 'POST', body: fd });
+          if (!res.ok) failedPhoto++;
+        } catch (e) { failedPhoto++; }
+      }
+    }
     closeModal('addCompanyModal');
-    showToast('✅ 고객사가 추가되었습니다.');
+    clearNewCompanyNotices();
+    let msg;
+    if (failedText) msg = `⚠️ 고객사는 추가됐지만 주의사항 ${failedText}건이 저장되지 않았습니다. 수정에서 확인해주세요.`;
+    else if (failedPhoto) msg = `⚠️ 주의사항은 저장됐지만 사진 ${failedPhoto}장이 올라가지 않았습니다. 수정에서 다시 붙여주세요.`;
+    else if (pending.length) msg = `✅ 고객사와 주의사항 ${pending.length}건이 추가되었습니다.`;
+    else msg = '✅ 고객사가 추가되었습니다.';
+    showToast(msg);
     await loadCompanies();
     loadCompanyTab();
   } catch (e) { showToast('⚠️ ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '추가'; }
 }
 
 async function deleteCompany(id) {
