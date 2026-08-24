@@ -160,6 +160,24 @@ header h2 { font-size: 16px; font-weight: 700; }
 .delivery-card.unloaded { border-left-color: #0d9488; }
 .delivery-card.done     { border-left-color: #16a34a; }
 .delivery-card.cancel   { border-left-color: #dc2626; }
+/* 기사 미완료 목록: 왼쪽 줄을 날짜로 구분 (지남·오늘·내일·그 이후) */
+.delivery-card.d-past     { border-left-color: #dc2626; }
+.delivery-card.d-today    { border-left-color: #ea580c; }
+.delivery-card.d-tomorrow { border-left-color: #0ea5e9; }
+.delivery-card.d-later    { border-left-color: #9ca3af; }
+.date-chip { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
+.date-chip.d-past     { background: #fee2e2; color: #b91c1c; }
+.date-chip.d-today    { background: #ffedd5; color: #c2410c; }
+.date-chip.d-tomorrow { background: #e0f2fe; color: #0369a1; }
+/* 기한 지난 미완료 건 (접이식) */
+.stale-deliveries { border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; }
+.stale-deliveries > summary { cursor: pointer; padding: 12px 14px; font-size: 13px; font-weight: 600; color: #b91c1c; list-style: none; }
+.stale-deliveries > summary::-webkit-details-marker { display: none; }
+.stale-deliveries > summary::before { content: '▸ '; }
+.stale-deliveries[open] > summary::before { content: '▾ '; }
+.stale-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 12px; }
+.stale-hint { font-size: 12px; color: #9ca3af; margin: 0; }
+
 .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .card-id { font-size: 12px; color: #6b7280; }
 .card-company { font-size: 16px; font-weight: 700; color: #1e3a5f; }
@@ -1156,6 +1174,29 @@ const STATUS_BADGE = {
   unloaded: 'badge-unloaded', weighed: 'badge-progress', done: 'badge-done', cancel: 'badge-cancel'
 };
 
+// ── 날짜 계산 ──────────────────────────────────────
+// toISOString()은 세계 표준시라 한국 시간 새벽 0~9시에 하루 전 날짜가 나온다.
+// 배송 날짜는 기기의 현지 날짜와 맞아야 하므로 직접 만든다.
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function dateStrOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return localDateStr(d);
+}
+
+// 기사 미완료 목록의 날짜 구분 (지남 / 오늘 / 내일 / 그 이후)
+function deliveryDateClass(dateStr) {
+  if (!dateStr) return 'd-later';
+  const today = localDateStr();
+  if (dateStr < today) return 'd-past';
+  if (dateStr === today) return 'd-today';
+  if (dateStr === dateStrOffset(1)) return 'd-tomorrow';
+  return 'd-later';
+}
+const DATE_CLASS_LABELS = { 'd-past': '지남', 'd-today': '오늘', 'd-tomorrow': '내일' };
+
 function cardBadgeLabel(status) {
   if (PROGRESS_STATUSES.includes(status)) return '진행중';
   return STATUS_LABELS[status] || status;
@@ -1944,7 +1985,7 @@ async function deleteCompany(id) {
 // 대시보드
 // ═══════════════════════════════════════════════════
 async function loadDashboard() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   try {
     const list = await api('GET', `/deliveries/?date=${today}`);
     document.getElementById('stat-wait').textContent     = list.filter(d => d.status === 'wait').length;
@@ -1990,7 +2031,7 @@ async function loadDeliveries() {
 // 기사 현황
 // ═══════════════════════════════════════════════════
 async function loadDriverStatus() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   try {
     const list = await api('GET', `/deliveries/?date=${today}`);
     const html = drivers.map(dr => {
@@ -2031,7 +2072,30 @@ async function loadMyDeliveries() {
     const list = await api('GET', '/deliveries/');
     await Promise.all([loadUnreadCounts(), loadMyAcks()]);
     const active = list.filter(d => d.status !== 'done' && d.status !== 'cancel');
-    document.getElementById('myDeliveryList').innerHTML = renderDeliveryCards(active, 'driver') || emptyMsg('미완료 배송이 없습니다.');
+
+    // 이른 날짜·시간이 위로. 시간 미입력 건은 그 날의 맨 뒤로 보낸다
+    const key = d => `${d.scheduled_date || '9999-12-31'} ${d.delivery_time || '99:99'}`;
+    active.sort((a, b) => key(a).localeCompare(key(b)));
+
+    // 어제 날짜까지는 그대로 두고, 그보다 오래된 미완료 건은 접어둔다.
+    // 지우는 게 아니라 감추기만 한다 - 늦게 처리하는 건도 들어갈 수 있어야 하므로.
+    const cutoff = dateStrOffset(-1);
+    const stale  = active.filter(d => (d.scheduled_date || '') <  cutoff);
+    const recent = active.filter(d => (d.scheduled_date || '') >= cutoff);
+
+    const staleHTML = stale.length ? `
+      <details class="stale-deliveries">
+        <summary>⏰ 기한이 지난 미완료 ${stale.length}건 보기</summary>
+        <div class="stale-body">
+          <p class="stale-hint">예정일이 하루 넘게 지난 건입니다. 아직 처리할 수 있습니다.</p>
+          ${renderDeliveryCards(stale, 'driver')}
+        </div>
+      </details>` : '';
+
+    document.getElementById('myDeliveryList').innerHTML =
+      (renderDeliveryCards(recent, 'driver')
+        || emptyMsg(stale.length ? '예정된 미완료 배송이 없습니다.' : '미완료 배송이 없습니다.'))
+      + staleHTML;
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
 }
 
@@ -2105,13 +2169,22 @@ function deliveryCardHTML(d, mode) {
   const driverName = d.driver_user ? d.driver_user.name : '-';
   const isDriverMode = (mode === 'driver' || mode === 'driverHistory');
 
+  // 기사의 미완료 목록에서만 왼쪽 줄을 날짜 색으로 쓴다.
+  // (상태는 카드 안의 단계 막대로 보이고, 완료 내역은 전부 지난 날짜라 색 구분이 의미 없다)
+  const useDateColor = (mode === 'driver');
+  const dCls = useDateColor ? deliveryDateClass(d.scheduled_date) : '';
+  const dLabel = DATE_CLASS_LABELS[dCls] || '';
+  const cardCls = useDateColor ? dCls : d.status;
+  // 색만으로는 야외나 색각 이상에서 구분이 어려워 글자를 함께 붙인다
+  const dateChip = dLabel ? ` <span class="date-chip ${dCls}">${dLabel}</span>` : '';
+
   // 기사: 유의사항 동의 전에는 일시·상태만 보이고 세부 정보 가림
   if (isDriverMode && currentUser && currentUser.role === 'driver' && needsAckMask(d)) {
     return `
-  <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
+  <div class="delivery-card ${cardCls}" onclick="openDetail(${d.id})">
     <div class="card-header">
       <div>
-        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}</div>
+        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}${dateChip}</div>
         <div class="card-company">🔒 새 배차가 등록되었습니다</div>
       </div>
       <span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>
@@ -2127,10 +2200,10 @@ function deliveryCardHTML(d, mode) {
     ? driverStatusSteps(d)
     : `<span class="badge ${cardBadgeClass(d.status)}">${cardBadgeLabel(d.status)}</span>`;
   return `
-  <div class="delivery-card ${d.status}" onclick="openDetail(${d.id})">
+  <div class="delivery-card ${cardCls}" onclick="openDetail(${d.id})">
     <div class="card-header">
       <div>
-        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}</div>
+        <div class="card-id">D${String(d.id).padStart(3,'0')} · <span style="color:${d.delivery_type==='입하'?'#7c3aed':'#2563eb'}">${d.delivery_type||'출하'}</span> · ${escapeHtml(d.scheduled_date)} ${escapeHtml(d.delivery_time || '')}${dateChip}</div>
         <div class="card-company">${escapeHtml(d.company)}${unreadMap[d.id] ? `<span class="chat-unread-badge">💬 ${unreadMap[d.id]}</span>` : ''}</div>
       </div>
       ${statusArea}
@@ -2740,7 +2813,7 @@ attachCombo('av-driver',  '기사명·차량번호 입력 또는 선택');
 attachCombo('filterCompany', '전체 고객사', { includeEmpty: true });
 
 function openAssignModal() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   ['f-dest','f-note'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-type').value = '출하';
   document.getElementById('f-company').value = '';
@@ -3138,7 +3211,7 @@ async function downloadExcel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `배송목록_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.download = `배송목록_${localDateStr()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('✅ 엑셀 다운로드 완료');
