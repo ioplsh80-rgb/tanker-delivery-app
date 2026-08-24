@@ -95,7 +95,7 @@ def export_excel(
         "기사명", "차량번호", "배송날짜", "배송시간",
         "업무시작", "상차", "하차", "계근표등록", "완료시간", "상태", "특이사항",
     ]
-    col_widths = [6, 8, 16, 22, 20, 10, 10, 13, 13, 10, 10, 10, 10, 11, 10, 10, 26]
+    col_widths = [10, 8, 16, 22, 20, 10, 10, 13, 13, 10, 10, 10, 10, 11, 10, 10, 26]
 
     header_fill = PatternFill("solid", fgColor="1E3A5F")
     header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -120,7 +120,9 @@ def export_excel(
 
     for row_idx, d in enumerate(deliveries, 4):
         row_values = [
-            row_idx - 3,
+            # 화면·푸시 알림과 같은 배송번호. 예전에는 줄 번호(1,2,3…)라
+            # 거르는 조건에 따라 매번 달라져 어느 배송건인지 알 수 없었다.
+            f"D{d.id:03d}",
             d.delivery_type or "출하",
             d.company,
             d.destination,
