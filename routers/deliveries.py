@@ -638,9 +638,11 @@ def assign_vehicle(
     if assign.vehicle_number:
         d.vehicle_number = assign.vehicle_number
     else:
+        # 기사를 바꾸면 차량번호도 새 기사 것으로 맞춘다.
+        # 새 기사에게 차량번호가 없으면 비운다 — 예전에는 그대로 두어서
+        # 이전 기사의 차량번호가 남아 있었다.
         driver = db.query(models.User).filter(models.User.id == assign.driver_id).first()
-        if driver and driver.vehicle_number:
-            d.vehicle_number = driver.vehicle_number
+        d.vehicle_number = driver.vehicle_number if driver else None
     d.updated_at = datetime.utcnow()
     db.commit()
     # 담당 기사에게 배차 알림
