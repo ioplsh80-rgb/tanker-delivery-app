@@ -198,6 +198,29 @@ th.sortable.sorted { color: #2563eb; }
 .sort-arrow { font-size: 9px; margin-left: 4px; opacity: .55; }
 th.sortable.sorted .sort-arrow { opacity: 1; }
 
+/* 배송 목록: 카드 보기 / 표 보기 전환 + 표 */
+.viewtoggle { display: inline-flex; background: #e5e7eb; border-radius: 8px; padding: 3px; gap: 2px; }
+.viewtoggle button { padding: 6px 14px; border: none; background: transparent; border-radius: 6px; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; font-family: inherit; }
+.viewtoggle button.on { background: #fff; color: #1e3a5f; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+/* 열이 17개라 가로로 넘친다. 번호·업체명은 왼쪽에 붙여 어느 줄인지 잃지 않게 한다. */
+.dtable-wrap { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+.dtable { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; white-space: nowrap; }
+.dtable th { background: #1e3a5f; color: #fff; font-weight: 600; padding: 10px 12px; text-align: left; position: sticky; top: 0; z-index: 2; }
+.dtable th.sortable:hover,
+.dtable th.sortable.sorted { color: #93c5fd; }   /* 남색 바탕이라 밝은 파랑으로 */
+.dtable td { padding: 9px 12px; border-bottom: 1px solid #eef2f7; background: #fff; }
+.dtable tbody tr:hover td { background: #f8fafc; cursor: pointer; }
+.dtable .stick { position: sticky; z-index: 1; }
+.dtable th.stick { z-index: 3; }
+.dtable .c1 { left: 0; min-width: 64px; }
+.dtable .c2 { left: 64px; min-width: 132px; box-shadow: 2px 0 4px -2px rgba(0,0,0,.15); }
+.dtable .num { font-weight: 700; color: #1e3a5f; }
+.dtable .right { text-align: right; }
+.dtable .muted { color: #9ca3af; }
+.dtable .memo { white-space: normal; min-width: 200px; max-width: 340px; }
+.type-out { color: #b45309; font-weight: 600; }
+.type-in  { color: #0f766e; font-weight: 600; }
+
 /* 검색되는 선택 상자 (원래 select는 값만 들고 화면에서는 숨김) */
 .combo-source { display: none !important; }
 .combo { position: relative; }
@@ -404,7 +427,12 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         <button class="btn btn-primary btn-sm" id="btnOpenAssign2" onclick="openAssignModal()">+ 배송 카드 생성</button>
       </div>
       <div class="download-bar">
-        <span>📥 다운로드</span>
+        <div class="viewtoggle">
+          <button id="viewBtnCard" class="on" onclick="setDeliveryView('card')">🗂 카드 보기</button>
+          <button id="viewBtnTable" onclick="setDeliveryView('table')">📋 표 보기</button>
+        </div>
+        <span class="list-count" id="deliveryCount"></span>
+        <span style="margin-left:auto;">📥 다운로드</span>
         <button class="btn btn-outline btn-sm" onclick="downloadExcel()">📊 엑셀 다운로드</button>
       </div>
       <div class="filter-bar">
@@ -2023,8 +2051,120 @@ async function loadDeliveries() {
   try {
     const list = await api('GET', '/deliveries/?' + qs.toString());
     await loadUnreadCounts();
-    document.getElementById('deliveryList').innerHTML = renderDeliveryCards(list, 'admin') || emptyMsg('배송 내역이 없습니다.');
+    deliveryTabList = list || [];
+    deliveryTabList.forEach(d => { deliveriesCache[d.id] = d; });
+    renderDeliveryTab();
   } catch (e) { showToast('⚠️ 데이터 로딩 실패'); }
+}
+
+
+// ── 배송 목록: 카드 보기 / 표 보기 ─────────────────────
+// 엑셀과 같은 17개 열을 화면에서 바로 본다. 목록을 다시 불러오지 않고
+// 이미 받아둔 것을 다시 그리기만 하므로 전환·정렬이 즉시 끝난다.
+let deliveryTabList = [];
+let deliveryView = localStorage.getItem('deliveryView') === 'table' ? 'table' : 'card';
+let deliverySort = { key: null, asc: true };   // key 가 없으면 서버가 준 기본 순서
+
+const STATUS_ORDER = ['wait', 'start', 'loaded', 'unloaded', 'weighed', 'done', 'cancel'];
+const time_ = v => v || '';
+
+// v: 화면에 그릴 내용 / s: 정렬에 쓸 값 / cls: 칸 스타일 / thCls: 머리글 스타일
+const DTABLE_COLS = [
+  { k:'id',        label:'번호',       cls:'stick c1 num', thCls:'stick c1',
+    v:d => 'D' + String(d.id).padStart(3,'0'), s:d => d.id },
+  { k:'company',   label:'업체명',     cls:'stick c2', thCls:'stick c2',
+    v:d => escapeHtml(d.company || '-') },
+  { k:'delivery_type', label:'유형',
+    v:d => { const t = d.delivery_type || '출하';
+             return `<span class="type-${t === '입하' ? 'in' : 'out'}">${t}</span>`; },
+    s:d => d.delivery_type || '출하' },
+  { k:'destination', label:'목적지',   v:d => escapeHtml(d.destination || '-') },
+  { k:'item_name',   label:'품목',     v:d => escapeHtml(d.item_name || '-') },
+  { k:'quantity',    label:'수량(Kg)', cls:'right', thCls:'right',
+    v:d => Number(d.quantity || 0).toLocaleString(), s:d => d.quantity || 0 },
+  { k:'driver',      label:'기사명',
+    v:d => d.driver_user ? escapeHtml(d.driver_user.name) : '<span class="muted">미배차</span>',
+    s:d => d.driver_user ? d.driver_user.name : '' },
+  { k:'vehicle_number', label:'차량번호',
+    v:d => d.vehicle_number ? escapeHtml(d.vehicle_number) : '<span class="muted">-</span>',
+    s:d => d.vehicle_number || '' },
+  { k:'scheduled_date', label:'배송날짜', v:d => d.scheduled_date || '-' },
+  { k:'delivery_time',  label:'배송시간',
+    v:d => d.delivery_time || '<span class="muted">미정</span>', s:d => time_(d.delivery_time) },
+  { k:'work_start_time', label:'업무시작',
+    v:d => d.work_start_time || '<span class="muted">-</span>', s:d => time_(d.work_start_time) },
+  { k:'loading_complete_time', label:'상차',
+    v:d => d.loading_complete_time || '<span class="muted">-</span>', s:d => time_(d.loading_complete_time) },
+  { k:'unloaded_time', label:'하차',
+    v:d => d.unloaded_time || '<span class="muted">-</span>', s:d => time_(d.unloaded_time) },
+  { k:'weighed_time', label:'계근표등록',
+    v:d => d.weighed_time || '<span class="muted">-</span>', s:d => time_(d.weighed_time) },
+  { k:'complete_time', label:'완료시간',
+    v:d => d.complete_time || '<span class="muted">-</span>', s:d => time_(d.complete_time) },
+  { k:'status', label:'상태',
+    v:d => `<span class="badge ${STATUS_BADGE[d.status] || ''}">${STATUS_LABELS[d.status] || d.status}</span>`,
+    s:d => STATUS_ORDER.indexOf(d.status) },
+  { k:'notes', label:'특이사항', cls:'memo', v:d => escapeHtml(d.notes || '-') },
+];
+
+function setDeliveryView(v) {
+  deliveryView = v;
+  localStorage.setItem('deliveryView', v);
+  document.getElementById('viewBtnCard').classList.toggle('on', v === 'card');
+  document.getElementById('viewBtnTable').classList.toggle('on', v === 'table');
+  renderDeliveryTab();
+}
+
+// 같은 열을 세 번 누르면 기본 순서로 돌아온다 (오름차순 → 내림차순 → 해제)
+function sortDeliveryTable(key) {
+  if (deliverySort.key !== key) deliverySort = { key, asc: true };
+  else if (deliverySort.asc)    deliverySort.asc = false;
+  else                          deliverySort = { key: null, asc: true };
+  renderDeliveryTab();
+}
+
+function sortedDeliveryList() {
+  const { key, asc } = deliverySort;
+  if (!key) return deliveryTabList;
+  const col = DTABLE_COLS.find(c => c.k === key);
+  const val = (col && col.s) || (d => d[key]);
+  return deliveryTabList.slice().sort((a, b) => {
+    const av = val(a), bv = val(b);
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * (asc ? 1 : -1);
+    const as = (av || '').toString(), bs = (bv || '').toString();
+    if (!as !== !bs) return as ? -1 : 1;      // 비어있는 값은 방향과 무관하게 뒤로
+    return as.localeCompare(bs, 'ko') * (asc ? 1 : -1);
+  });
+}
+
+function deliveryTableHTML(list) {
+  const { key, asc } = deliverySort;
+  const head = DTABLE_COLS.map(c => {
+    const on = key === c.k;
+    const cls = ['sortable', c.thCls || '', on ? 'sorted' : ''].filter(Boolean).join(' ');
+    const arrow = on ? (asc ? '▲' : '▼') : '↕';
+    return `<th class="${cls}" onclick="sortDeliveryTable('${c.k}')">${c.label}<span class="sort-arrow">${arrow}</span></th>`;
+  }).join('');
+  const rows = list.map(d =>
+    `<tr onclick="openDetail(${d.id})">` +
+    DTABLE_COLS.map(c => `<td class="${c.cls || ''}">${c.v(d)}</td>`).join('') +
+    `</tr>`).join('');
+  return `<div class="dtable-wrap"><table class="dtable"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderDeliveryTab() {
+  const box = document.getElementById('deliveryList');
+  const cnt = document.getElementById('deliveryCount');
+  if (cnt) cnt.innerHTML = deliveryTabList.length ? `전체 <b>${deliveryTabList.length}건</b>` : '';
+  // 지난번에 고른 보기 방식이 남아 있으므로 버튼 표시를 맞춰준다
+  document.getElementById('viewBtnCard').classList.toggle('on', deliveryView === 'card');
+  document.getElementById('viewBtnTable').classList.toggle('on', deliveryView === 'table');
+  // 카드 보기일 때만 세로로 쌓는 배치를 쓴다 (표는 스스로 폭을 잡는다)
+  box.classList.toggle('delivery-list', deliveryView === 'card');
+  if (!deliveryTabList.length) { box.innerHTML = emptyMsg('배송 내역이 없습니다.'); return; }
+  box.innerHTML = deliveryView === 'table'
+    ? deliveryTableHTML(sortedDeliveryList())
+    : renderDeliveryCards(deliveryTabList, 'admin');
 }
 
 // ═══════════════════════════════════════════════════
