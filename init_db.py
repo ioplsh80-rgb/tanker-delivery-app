@@ -39,6 +39,7 @@ migrations = [
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
     ("delivery_photos", "batch_no",      "INTEGER DEFAULT 1"),
+    ("delivery_photos", "drive_renamed", "BOOLEAN DEFAULT FALSE"),
 ]
 
 with engine.connect() as conn:

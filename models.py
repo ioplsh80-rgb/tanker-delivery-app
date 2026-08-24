@@ -212,5 +212,7 @@ class DeliveryPhoto(Base):
     # 계근표 등록 회차. 되돌린 뒤 다시 올리면 2, 3...으로 올라간다.
     # 화면에는 최신 회차만 펼쳐 보이고 이전 회차는 접어둔다 (증빙이라 지우지 않음).
     batch_no = Column(Integer, nullable=False, default=1)
+    # 드라이브 파일 이름·폴더를 새 규칙으로 정리했는지. 기존 사진 일괄 정리의 진행 표시.
+    drive_renamed = Column(Boolean, default=False)
 
     delivery = relationship("Delivery", back_populates="photos")

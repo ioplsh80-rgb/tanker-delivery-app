@@ -2,8 +2,9 @@ import base64
 import io
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 
 KST = timezone(timedelta(hours=9))
 
@@ -37,31 +38,92 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 
-def _upload_to_drive(contents: bytes, filename: str, mime_type: str, subfolder: Optional[str] = None) -> Optional[str]:
+# ── 드라이브 파일·폴더 이름 다듬기 ─────────────────────────────
+# 윈도우에서 파일 이름에 쓸 수 없는 문자. 내려받은 뒤 열리지 않는 일을 막는다.
+_BAD_NAME_CHARS = re.compile(r'[\\/:*?"<>|\r\n\t]')
+
+
+def _clean_name_part(s: Optional[str], fallback: str = "미상") -> str:
+    s = _BAD_NAME_CHARS.sub("_", (s or "").strip())
+    s = re.sub(r"\s+", " ", s).strip(" .")
+    return s or fallback
+
+
+def _item_short_name(item_name: Optional[str]) -> str:
+    """품목에서 화학식 괄호를 뺀다: '황산 (H₂SO₄)' → '황산'"""
+    base = re.split(r"[(（]", item_name or "", 1)[0]
+    return _clean_name_part(base, "품목미상")
+
+
+def weighing_photo_name(d, uploaded_kst: datetime, batch_no: int, seq: int,
+                        original_filename: Optional[str]) -> str:
+    """계근표 사진의 드라이브 파일 이름.
+    배송번호_기사_고객사_배송날짜_계근표등록시각_품목[_N회차]_순번.확장자"""
+    ext = os.path.splitext(original_filename or "")[1].lower()
+    if not re.fullmatch(r"\.[a-z0-9]{1,5}", ext or ""):
+        ext = ".jpg"
+    parts = [
+        f"D{d.id:03d}",
+        _clean_name_part(d.driver_user.name if d.driver_user else None, "미배정"),
+        _clean_name_part(d.company, "고객사미상"),
+        (d.scheduled_date or "").replace("-", "") or "날짜미상",
+        uploaded_kst.strftime("%H%M"),
+        _item_short_name(d.item_name),
+    ]
+    name = "_".join(parts)
+    if batch_no and batch_no > 1:
+        name += f"_{batch_no}회차"
+    return f"{name}_{seq}{ext}"
+
+
+def weighing_photo_folders(company: Optional[str]) -> List[str]:
+    """계근표 저장 위치: 기본 폴더 / 완료 / 고객사"""
+    return ["완료", _clean_name_part(company, "고객사미상")]
+
+
+def _ensure_folder(service, parent_id: str, name: str) -> str:
+    """parent_id 아래에 name 폴더를 찾고, 없으면 만들어 ID를 돌려준다."""
+    safe = name.replace("\\", "\\\\").replace("'", "\\'")
+    q = (f"name = '{safe}' and mimeType = 'application/vnd.google-apps.folder' "
+         f"and '{parent_id}' in parents and trashed = false")
+    found = service.files().list(q=q, fields="files(id)").execute().get("files", [])
+    if found:
+        return found[0]["id"]
+    created = service.files().create(
+        body={"name": name, "mimeType": "application/vnd.google-apps.folder",
+              "parents": [parent_id]},
+        fields="id",
+    ).execute()
+    return created["id"]
+
+
+def resolve_drive_folder(service, subfolder: Union[str, List[str], None]) -> Optional[str]:
+    """기본 폴더에서 시작해 하위 폴더를 따라 내려가며 ID를 돌려준다 (없으면 생성)."""
+    folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+    if not folder_id:
+        return None
+    if not subfolder:
+        return folder_id
+    names = [subfolder] if isinstance(subfolder, str) else list(subfolder)
+    for name in names:
+        if name:
+            folder_id = _ensure_folder(service, folder_id, name)
+    return folder_id
+
+
+def _upload_to_drive(contents: bytes, filename: str, mime_type: str,
+                     subfolder: Union[str, List[str], None] = None) -> Optional[str]:
     """Google Drive에 파일 업로드(비공개), 파일 ID 반환. 실패 시 None.
-    subfolder 지정 시 기본 폴더 아래 해당 이름의 하위폴더에 저장 (없으면 생성)."""
+    subfolder는 폴더 이름 하나 또는 여러 단계의 목록. 없으면 만들어 저장한다."""
     try:
         from googleapiclient.http import MediaIoBaseUpload
 
-        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
         service = get_drive_service()
-        if not service or not folder_id:
+        if not service:
             return None
-
-        if subfolder:
-            q = (f"name = '{subfolder}' and mimeType = 'application/vnd.google-apps.folder' "
-                 f"and '{folder_id}' in parents and trashed = false")
-            res = service.files().list(q=q, fields="files(id)").execute()
-            found = res.get("files", [])
-            if found:
-                folder_id = found[0]["id"]
-            else:
-                new_folder = service.files().create(
-                    body={"name": subfolder, "mimeType": "application/vnd.google-apps.folder",
-                          "parents": [folder_id]},
-                    fields="id",
-                ).execute()
-                folder_id = new_folder["id"]
+        folder_id = resolve_drive_folder(service, subfolder)
+        if not folder_id:
+            return None
 
         file_metadata = {"name": filename, "parents": [folder_id]}
         media = MediaIoBaseUpload(io.BytesIO(contents), mimetype=mime_type)
@@ -648,12 +710,17 @@ async def upload_photos(
         models.DeliveryPhoto.delivery_id == delivery_id).scalar()
     batch_no = (last_batch or 0) + 1
 
-    for file in files:
+    uploaded_kst = datetime.now(KST)
+    folders = weighing_photo_folders(d.company)
+
+    for seq, file in enumerate(files, start=1):
         contents = await file.read()
         mime = file.content_type or "image/jpeg"
         fname = file.filename or "photo.jpg"
+        # 드라이브에는 알아볼 수 있는 이름으로 저장한다 (원본 이름은 DB에 남긴다)
+        drive_name = weighing_photo_name(d, uploaded_kst, batch_no, seq, fname)
 
-        drive_id = _upload_to_drive(contents, fname, mime)
+        drive_id = _upload_to_drive(contents, drive_name, mime, subfolder=folders)
         if drive_id:
             db.add(models.DeliveryPhoto(
                 delivery_id=delivery_id,
@@ -661,6 +728,7 @@ async def upload_photos(
                 drive_file_id=drive_id,
                 filename=fname,
                 batch_no=batch_no,
+                drive_renamed=True,
             ))
         else:
             photo_data = f"data:{mime};base64," + base64.b64encode(contents).decode()
@@ -669,6 +737,7 @@ async def upload_photos(
                 photo_data=photo_data,
                 filename=fname,
                 batch_no=batch_no,
+                drive_renamed=True,   # 드라이브에 없는 사진은 정리 대상이 아님
             ))
 
     # 계근표 등록 시각 기록 후 완료로 자동 전환

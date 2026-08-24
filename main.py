@@ -50,3 +50,14 @@ async def service_worker():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+def _start_drive_cleanup():
+    """예전 방식으로 저장된 계근표 사진의 이름·폴더 정리를 뒤에서 이어서 진행.
+    남은 것이 없으면 즉시 끝나며, 실패해도 서비스에는 영향을 주지 않는다."""
+    try:
+        import drive_cleanup
+        drive_cleanup.start_background()
+    except Exception as e:
+        print(f"[드라이브 정리] 시작 실패: {type(e).__name__} {e}")
