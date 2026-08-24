@@ -633,6 +633,7 @@ def assign_vehicle(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
+    prev_driver_id = d.driver_id          # 알림 문구를 신규/변경으로 나누기 위해 미리 둔다
     d.driver_id = assign.driver_id
     d.assigned_by = current_user.id
     if assign.vehicle_number:
@@ -645,14 +646,27 @@ def assign_vehicle(
         d.vehicle_number = driver.vehicle_number if driver else None
     d.updated_at = datetime.utcnow()
     db.commit()
-    # 담당 기사에게 배차 알림
+    # 배차 알림
     from routers.push import send_push_to_users
+    is_change = prev_driver_id is not None and prev_driver_id != d.driver_id
+    when = f"D{d.id:03d} · {d.scheduled_date} {d.delivery_time or ''}".rstrip()
+
+    # 새로 맡게 된 기사
     background_tasks.add_task(
         send_push_to_users, [d.driver_id],
-        "🚛 새 배차가 등록되었습니다",
-        f"D{d.id:03d} · {d.scheduled_date} {d.delivery_time or ''} — 카드를 열어 확인해주세요.",
+        "🚛 배차가 등록되었습니다" if is_change else "🚛 새 배차가 등록되었습니다",
+        f"{when} — 카드를 열어 확인해주세요.",
         f"/?open={d.id}",
     )
+    # 배차가 넘어간 기존 기사 — 알리지 않으면 카드가 말없이 사라진다.
+    # 더는 볼 수 없는 카드라 여는 주소 대신 목록으로 보낸다.
+    if is_change:
+        background_tasks.add_task(
+            send_push_to_users, [prev_driver_id],
+            "🔄 배차가 다른 기사로 변경되었습니다",
+            f"{when} — 더 이상 담당하지 않습니다.",
+            "/",
+        )
     return {"success": True}
 
 
