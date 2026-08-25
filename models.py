@@ -60,11 +60,13 @@ class CompanyNotice(Base):
 
 
 class StageNotice(Base):
-    """단계별 안전 유의사항 (상차/하차 등) - 전 고객사 공통, 단계 확장 가능"""
+    """단계별 안전 유의사항 - 전 고객사 공통, 단계 확장 가능.
+    출하·입하마다 상차/하차 유의사항을 따로 둔다 (2026-08-24)."""
     __tablename__ = "stage_notices"
 
     id = Column(Integer, primary_key=True, index=True)
     stage = Column(String(10), nullable=False, index=True)   # loaded(상차) / unloaded(하차)
+    delivery_type = Column(String(10), nullable=False, default="출하", index=True)  # 출하 / 입하
     content = Column(Text, nullable=False)
     drive_file_id = Column(String(200))
     order_num = Column(Integer, default=0)

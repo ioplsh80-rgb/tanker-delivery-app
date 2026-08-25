@@ -223,6 +223,13 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
 .type-out { color: #b45309; font-weight: 600; }
 .type-in  { color: #0f766e; font-weight: 600; }
 
+/* 안전 유의사항: 출하/입하 전환 — 어느 쪽을 고치고 있는지 눈에 띄게 */
+.sn-typebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+#sn-type-hint { font-size: 13px; color: #6b7280; }
+.sn-banner { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; border-left: 4px solid; }
+.sn-banner-출하 { background: #fff7ed; border-color: #b45309; color: #7c2d12; }
+.sn-banner-입하 { background: #f0fdfa; border-color: #0f766e; color: #134e4a; }
+
 /* 검색되는 선택 상자 (원래 select는 값만 들고 화면에서는 숨김) */
 .combo-source { display: none !important; }
 .combo { position: relative; }
@@ -513,17 +520,25 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         <h3>안전 유의사항</h3>
       </div>
       <div class="info-box">💡 전 고객사 공통으로 적용됩니다. 기사·관리자가 해당 단계를 진행할 때 한 건씩 확인하고 동의해야 넘어갈 수 있습니다.</div>
+      <div class="sn-typebar">
+        <div class="viewtoggle">
+          <button id="snTypeBtn-출하" class="on" onclick="setStageNoticeType('출하')">🚚 출하</button>
+          <button id="snTypeBtn-입하" onclick="setStageNoticeType('입하')">🏭 입하</button>
+        </div>
+        <span id="sn-type-hint">지금 <b>출하</b> 배송의 유의사항을 보고 있습니다.</span>
+      </div>
+      <div id="sn-type-banner" class="sn-banner sn-banner-출하">🚚 <b>출하</b> 배송에 적용되는 유의사항입니다.</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;">
         <div style="flex:1;min-width:320px;">
           <div class="section-header">
-            <h3 style="font-size:15px;">📦 상차 유의사항 <span id="sn-loaded-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></h3>
+            <h3 style="font-size:15px;">📦 <span class="sn-type-word">출하</span> · 상차 유의사항 <span id="sn-loaded-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></h3>
             <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;" onclick="addStageNoticeRow('loaded')">+ 추가</button>
           </div>
           <div id="sn-loaded-list" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
         <div style="flex:1;min-width:320px;">
           <div class="section-header">
-            <h3 style="font-size:15px;">📥 하차 유의사항 <span id="sn-unloaded-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></h3>
+            <h3 style="font-size:15px;">📥 <span class="sn-type-word">출하</span> · 하차 유의사항 <span id="sn-unloaded-count" style="color:#6b7280;font-size:12px;font-weight:400;">(0/10)</span></h3>
             <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;" onclick="addStageNoticeRow('unloaded')">+ 추가</button>
           </div>
           <div id="sn-unloaded-list" style="display:flex;flex-direction:column;gap:8px;"></div>
@@ -1751,24 +1766,54 @@ async function openEditCompanyModal(id, name, address, contactName, contactPhone
 // 안전 유의사항 (상차/하차) 관리
 // ═══════════════════════════════════════════════════
 const STAGE_LABELS_KO = { loaded: '상차', unloaded: '하차' };
-let stageNotices = { loaded: [], unloaded: [] };
+// 유의사항은 출하·입하마다 상차/하차를 따로 둔다 (2026-08-24 개편)
+const emptyStageNotices = () => ({ '출하': { loaded: [], unloaded: [] },
+                                   '입하': { loaded: [], unloaded: [] } });
+let stageNotices = emptyStageNotices();
+let stageNoticeType = '출하';        // 관리 화면에서 지금 보고 있는 쪽
+
+// 옛 배송건은 유형이 비어 있을 수 있고, 그때는 목록 필터와 같이 출하로 본다
+function deliveryTypeOf(d) { return (d && d.delivery_type) === '입하' ? '입하' : '출하'; }
+function stageNoticesFor(d, stage) { return (stageNotices[deliveryTypeOf(d)] || {})[stage] || []; }
 
 async function loadStageNotices() {
   try {
     const list = await api('GET', '/stage-notices') || [];
-    stageNotices = { loaded: [], unloaded: [] };
-    list.forEach(n => { if (stageNotices[n.stage]) stageNotices[n.stage].push(n); });
-  } catch (e) { stageNotices = { loaded: [], unloaded: [] }; }
+    stageNotices = emptyStageNotices();
+    list.forEach(n => {
+      const t = n.delivery_type === '입하' ? '입하' : '출하';
+      if (stageNotices[t][n.stage]) stageNotices[t][n.stage].push(n);
+    });
+  } catch (e) { stageNotices = emptyStageNotices(); }
 }
 
 async function loadStageNoticeTab() {
   await loadStageNotices();
+  renderStageNoticeType();
+}
+
+function setStageNoticeType(t) {
+  stageNoticeType = t;
+  renderStageNoticeType();
+}
+
+function renderStageNoticeType() {
+  const t = stageNoticeType;
+  ['출하', '입하'].forEach(x => {
+    const b = document.getElementById('snTypeBtn-' + x);
+    if (b) b.classList.toggle('on', x === t);
+  });
+  const banner = document.getElementById('sn-type-banner');
+  banner.className = 'sn-banner sn-banner-' + t;
+  banner.innerHTML = (t === '출하' ? '🚚' : '🏭') + ` <b>${t}</b> 배송에 적용되는 유의사항입니다.`;
+  document.getElementById('sn-type-hint').innerHTML = `지금 <b>${t}</b> 배송의 유의사항을 보고 있습니다.`;
+  document.querySelectorAll('.sn-type-word').forEach(e => { e.textContent = t; });
   ['loaded', 'unloaded'].forEach(renderStageNoticeList);
 }
 
 function renderStageNoticeList(stage) {
   const list = document.getElementById(`sn-${stage}-list`);
-  const items = stageNotices[stage] || [];
+  const items = (stageNotices[stageNoticeType] || {})[stage] || [];
   document.getElementById(`sn-${stage}-count`).textContent = `(${items.length}/10)`;
   if (!items.length) {
     list.innerHTML = '<div style="color:#9ca3af;font-size:13px;">등록된 유의사항이 없습니다.</div>';
@@ -1812,7 +1857,7 @@ async function saveNewStageNotice(stage) {
   const content = document.getElementById(`sn-new-text-${stage}`).value.trim();
   if (!content) { showToast('⚠️ 내용을 입력해주세요.'); return; }
   try {
-    await api('POST', '/stage-notices', { stage, content });
+    await api('POST', '/stage-notices', { stage, delivery_type: stageNoticeType, content });
     showToast('✅ 유의사항이 추가되었습니다.');
     await loadStageNoticeTab();
   } catch (e) { showToast('⚠️ ' + e.message); }
@@ -2559,7 +2604,7 @@ async function doStatusStep(id, status, timeField, toastMsg) {
       closeModal('detailModal');
     } catch (e) { showToast('⚠️ ' + e.message); }
   };
-  if ((stageNotices[status] || []).length) return runStageAck(id, status, proceed);
+  if (stageNoticesFor(deliveriesCache[id], status).length) return runStageAck(id, status, proceed);
   if (!confirm(`"${STATUS_LABELS[status]}" 처리하시겠습니까?`)) return;
   return proceed();
 }
@@ -2653,15 +2698,17 @@ async function openDetail(id) {
 async function loadStageAckStatus(d) {
   const el = document.getElementById('stage-ack-line');
   if (!el) return;
-  const stages = ['loaded', 'unloaded'].filter(st => (stageNotices[st] || []).length);
+  const type = deliveryTypeOf(d);
+  const stages = ['loaded', 'unloaded'].filter(st => stageNoticesFor(d, st).length);
   if (!stages.length) { el.innerHTML = ''; return; }
   try {
     const acks = await api('GET', `/deliveries/${d.id}/notice-ack`) || [];
     el.innerHTML = stages.map(st => {
       const a = acks.find(x => x.stage === st);
+      const what = `${type} · ${STAGE_LABELS_KO[st]}`;
       return a
-        ? `<span style="color:#166534;margin-right:14px;">✅ ${STAGE_LABELS_KO[st]} 유의사항 확인 (${escapeHtml(a.user_name)} · ${formatChatTime(a.agreed_at)})</span>`
-        : `<span style="color:#9ca3af;margin-right:14px;">⏳ ${STAGE_LABELS_KO[st]} 유의사항 미확인</span>`;
+        ? `<span style="color:#166534;margin-right:14px;">✅ ${what} 유의사항 확인 (${escapeHtml(a.user_name)} · ${formatChatTime(a.agreed_at)})</span>`
+        : `<span style="color:#9ca3af;margin-right:14px;">⏳ ${what} 유의사항 미확인</span>`;
     }).join('');
   } catch (e) {}
 }
@@ -2758,16 +2805,19 @@ async function submitNoticeAck() {
 
 // 단계(상차/하차) 진행 전 유의사항 확인 - 등록된 유의사항이 없으면 바로 진행
 async function runStageAck(deliveryId, stage, proceed) {
-  const notices = stageNotices[stage] || [];
+  const d = deliveriesCache[deliveryId];
+  const type = deliveryTypeOf(d);
+  const notices = stageNoticesFor(d, stage);
   if (!notices.length) return proceed();
   try {
     const acks = await api('GET', `/deliveries/${deliveryId}/notice-ack`) || [];
     if (acks.some(a => a.user_id === currentUser.id && a.stage === stage)) return proceed();
   } catch (e) {}
+  const what = `${type} · ${STAGE_LABELS_KO[stage]}`;
   startNoticeAck({
     deliveryId, stage, notices,
-    title: `${STAGE_LABELS_KO[stage]} 유의사항 확인`,
-    headerText: `<b>${STAGE_LABELS_KO[stage]} 작업 전</b> 반드시 확인해야 할 사항입니다.`,
+    title: `${what} 유의사항 확인`,
+    headerText: `<b>${what} 작업 전</b> 반드시 확인해야 할 사항입니다.`,
     onAgree: proceed,
   });
 }

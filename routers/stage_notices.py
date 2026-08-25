@@ -16,8 +16,14 @@ from routers.auth import get_current_user
 router = APIRouter()
 
 VALID_STAGES = ("loaded", "unloaded")
+VALID_TYPES = ("출하", "입하")
 STAGE_LABELS = {"loaded": "상차", "unloaded": "하차"}
-MAX_PER_STAGE = 10
+MAX_PER_STAGE = 10   # 출하·입하 × 상차·하차 각 칸마다
+
+
+def normalize_type(v):
+    """옛 배송건은 유형이 비어 있을 수 있고, 그때는 목록 필터와 같이 출하로 본다."""
+    return "입하" if v == "입하" else "출하"
 PHOTO_SUBFOLDER = "상하차유의사항_사진"
 
 
@@ -29,6 +35,7 @@ def _require_superadmin(current_user: models.User):
 @router.get("", response_model=List[schemas.StageNoticeResponse])
 def list_stage_notices(
     stage: Optional[str] = None,
+    delivery_type: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -36,7 +43,11 @@ def list_stage_notices(
     q = db.query(models.StageNotice)
     if stage:
         q = q.filter(models.StageNotice.stage == stage)
-    return q.order_by(models.StageNotice.stage, models.StageNotice.order_num).all()
+    if delivery_type:
+        q = q.filter(models.StageNotice.delivery_type == normalize_type(delivery_type))
+    return q.order_by(
+        models.StageNotice.delivery_type, models.StageNotice.stage, models.StageNotice.order_num
+    ).all()
 
 
 @router.post("", response_model=schemas.StageNoticeResponse)
@@ -48,12 +59,19 @@ def add_stage_notice(
     _require_superadmin(current_user)
     if body.stage not in VALID_STAGES:
         raise HTTPException(status_code=400, detail="알 수 없는 단계입니다.")
-    count = db.query(models.StageNotice).filter(models.StageNotice.stage == body.stage).count()
+    dtype = normalize_type(body.delivery_type)
+    if dtype not in VALID_TYPES:
+        raise HTTPException(status_code=400, detail="알 수 없는 배송 유형입니다.")
+    count = db.query(models.StageNotice).filter(
+        models.StageNotice.stage == body.stage,
+        models.StageNotice.delivery_type == dtype,
+    ).count()
     if count >= MAX_PER_STAGE:
         raise HTTPException(
             status_code=400,
-            detail=f"{STAGE_LABELS[body.stage]} 유의사항은 최대 {MAX_PER_STAGE}개까지 등록 가능합니다.")
-    notice = models.StageNotice(stage=body.stage, content=body.content, order_num=count)
+            detail=f"{dtype} {STAGE_LABELS[body.stage]} 유의사항은 최대 {MAX_PER_STAGE}개까지 등록 가능합니다.")
+    notice = models.StageNotice(
+        stage=body.stage, delivery_type=dtype, content=body.content, order_num=count)
     db.add(notice)
     db.commit()
     db.refresh(notice)
@@ -106,7 +124,7 @@ async def upload_stage_notice_photo(
     from routers.deliveries import _upload_to_drive
     contents = await file.read()
     mime = file.content_type or "image/jpeg"
-    fname = f"stage_{notice.stage}_{notice_id}_{file.filename}"
+    fname = f"stage_{notice.delivery_type}_{notice.stage}_{notice_id}_{file.filename}"
     drive_id = _upload_to_drive(contents, fname, mime, subfolder=PHOTO_SUBFOLDER)
     if not drive_id:
         raise HTTPException(status_code=500, detail="사진 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.")

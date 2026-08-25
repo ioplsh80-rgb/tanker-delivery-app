@@ -549,10 +549,14 @@ def create_notice_ack(
 
     # 동의 시점의 유의사항 내용을 증빙으로 저장
     if stage:
+        # 유의사항은 출하·입하마다 다르므로 이 배송건의 유형 것만 담는다.
+        # 옛 배송건은 유형이 비어 있을 수 있고, 그때는 목록 필터와 같이 출하로 본다.
+        dtype = "입하" if d.delivery_type == "입하" else "출하"
         snapshot = [
             {"content": n.content, "drive_file_id": n.drive_file_id}
             for n in db.query(models.StageNotice).filter(
-                models.StageNotice.stage == stage
+                models.StageNotice.stage == stage,
+                models.StageNotice.delivery_type == dtype,
             ).order_by(models.StageNotice.order_num).all()
         ]
     else:

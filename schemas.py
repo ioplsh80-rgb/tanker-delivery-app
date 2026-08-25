@@ -25,6 +25,7 @@ class CompanyNoticeResponse(BaseModel):
 # ── 단계별 안전 유의사항 (상차/하차) ──────────────────────
 class StageNoticeCreate(BaseModel):
     stage: str
+    delivery_type: str = "출하"
     content: str
 
 
@@ -35,6 +36,7 @@ class StageNoticeUpdate(BaseModel):
 class StageNoticeResponse(BaseModel):
     id: int
     stage: str
+    delivery_type: str = "출하"
     content: str
     drive_file_id: Optional[str] = None
     order_num: int

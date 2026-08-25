@@ -36,6 +36,8 @@ migrations = [
     ("deliveries", "weighed_time",  "VARCHAR(5)"),
     ("deliveries", "assigned_by",   "INTEGER"),
     ("delivery_notice_acks", "stage", "VARCHAR(10)"),
+    # stage_notices 테이블
+    ("stage_notices", "delivery_type", "VARCHAR(10) DEFAULT '출하'"),
     # delivery_photos 테이블
     ("delivery_photos", "drive_file_id", "VARCHAR(200)"),
     ("delivery_photos", "batch_no",      "INTEGER DEFAULT 1"),
@@ -69,6 +71,30 @@ with engine.connect() as conn:
     except Exception as e:
         conn.rollback()
         print(f"⚠️ 상태값 변환 건너뜀: {e}")
+
+# ── 안전 유의사항 출하/입하 분리 (1회성, 멱등) ────────────────
+# 예전에는 출하·입하 구분 없이 상차/하차 두 갈래뿐이었다. 컬럼을 더하면
+# 기존 것은 전부 '출하'가 되므로, 같은 내용을 '입하'에도 복사해 두어야
+# 입하 배송에서 유의사항이 통째로 사라지는 일을 막는다.
+# 이미 입하 것이 하나라도 있으면 손대지 않는다(두 번 복사 방지).
+with engine.connect() as conn:
+    try:
+        conn.execute(text("UPDATE stage_notices SET delivery_type='출하' WHERE delivery_type IS NULL OR delivery_type=''"))
+        conn.commit()
+        already = conn.execute(text("SELECT COUNT(*) FROM stage_notices WHERE delivery_type='입하'")).scalar()
+        if already:
+            print(f"ℹ️  안전 유의사항 입하 항목이 이미 {already}건 있어 복사를 건너뜁니다.")
+        else:
+            conn.execute(text(
+                "INSERT INTO stage_notices (stage, delivery_type, content, drive_file_id, order_num, created_at) "
+                "SELECT stage, '입하', content, drive_file_id, order_num, created_at "
+                "FROM stage_notices WHERE delivery_type='출하'"))
+            conn.commit()
+            n = conn.execute(text("SELECT COUNT(*) FROM stage_notices WHERE delivery_type='입하'")).scalar()
+            print(f"✅ 안전 유의사항을 입하에도 복사 완료 ({n}건)")
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ 안전 유의사항 출하/입하 분리 건너뜀: {e}")
 
 db = SessionLocal()
 
