@@ -163,3 +163,55 @@ def export_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
     )
+
+
+# ── 계근표 사진의 '원본 파일명 → 고객사' 대조표 ─────────────────────────────────
+# 구글 시트에 이미 쌓인 행의 '거래처'를 배송카드의 고객사명으로 채우기 위한 것.
+# 시트의 '파일명' 열에는 업로드 당시의 원본 이름(IMG_2847.jpg 등)이 들어 있는데,
+# 그 이름만으로는 어느 배송건인지 알 수 없어 앱 DB에서 뽑아 준다.
+# 같은 원본 이름이 서로 다른 고객사의 배송건에 여러 번 쓰였을 수 있으므로,
+# 그런 이름은 '중복' 으로 표시해 잘못 채우지 않도록 한다.
+@router.get("/photo-company-map")
+def photo_company_map(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role != "superadmin":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 내려받을 수 있습니다.")
+
+    rows = (
+        db.query(models.DeliveryPhoto.filename, models.Delivery.company, models.Delivery.id)
+        .join(models.Delivery, models.DeliveryPhoto.delivery_id == models.Delivery.id)
+        .filter(models.DeliveryPhoto.filename.isnot(None))
+        .all()
+    )
+
+    # 원본 이름 하나가 어느 고객사들에 걸쳐 쓰였는지 모은다
+    by_name = {}
+    for fname, company, did in rows:
+        if not fname:
+            continue
+        by_name.setdefault(fname, []).append((company or "", did))
+
+    buf = io.StringIO()
+    buf.write("\ufeff")                      # 엑셀·시트에서 한글이 깨지지 않도록
+    buf.write("원본파일명,고객사,배송번호,중복\n")
+
+    def esc(v):
+        v = str(v or "")
+        return '"' + v.replace('"', '""') + '"' if any(c in v for c in ',"\n') else v
+
+    for fname, entries in sorted(by_name.items()):
+        companies = {c for c, _ in entries}
+        dup = "중복" if len(companies) > 1 else ""
+        company, did = entries[0]
+        buf.write(f"{esc(fname)},{esc(company)},D{did:03d},{dup}\n")
+
+    data = buf.getvalue().encode("utf-8")
+    filename = f"계근표_파일명_고객사_대조표_{datetime.now(KST).strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
