@@ -181,7 +181,8 @@ def photo_company_map(
         raise HTTPException(status_code=403, detail="슈퍼관리자만 내려받을 수 있습니다.")
 
     rows = (
-        db.query(models.DeliveryPhoto.filename, models.Delivery.company, models.Delivery.id)
+        db.query(models.DeliveryPhoto.filename, models.Delivery.company,
+                 models.Delivery.id, models.DeliveryPhoto.drive_file_id)
         .join(models.Delivery, models.DeliveryPhoto.delivery_id == models.Delivery.id)
         .filter(models.DeliveryPhoto.filename.isnot(None))
         .all()
@@ -189,24 +190,30 @@ def photo_company_map(
 
     # 원본 이름 하나가 어느 고객사들에 걸쳐 쓰였는지 모은다
     by_name = {}
-    for fname, company, did in rows:
+    for fname, company, did, drive_id in rows:
         if not fname:
             continue
-        by_name.setdefault(fname, []).append((company or "", did))
+        by_name.setdefault(fname, []).append((company or "", did, drive_id or ""))
 
     buf = io.StringIO()
     buf.write("\ufeff")                      # 엑셀·시트에서 한글이 깨지지 않도록
-    buf.write("원본파일명,고객사,배송번호,중복\n")
+    # 드라이브파일ID: 시트의 '파일명'을 지금 드라이브에 있는 이름으로 고칠 때 쓴다
+    buf.write("원본파일명,고객사,배송번호,중복,드라이브파일ID\n")
 
     def esc(v):
         v = str(v or "")
         return '"' + v.replace('"', '""') + '"' if any(c in v for c in ',"\n') else v
 
     for fname, entries in sorted(by_name.items()):
-        companies = {c for c, _ in entries}
+        companies = {c for c, _, _ in entries}
+        # 고객사가 갈리면 거래처를 채울 수 없다
         dup = "중복" if len(companies) > 1 else ""
-        company, did = entries[0]
-        buf.write(f"{esc(fname)},{esc(company)},D{did:03d},{dup}\n")
+        # 같은 이름이 사진 여러 장에 쓰였으면 어느 파일인지 고를 수 없다.
+        # 고객사는 같을 수 있으므로 거래처 채우기와는 따로 판단한다.
+        drive_ids = {d for _, _, d in entries if d}
+        company, did, _ = entries[0]
+        drive_id = drive_ids.pop() if len(drive_ids) == 1 else ''
+        buf.write(f"{esc(fname)},{esc(company)},D{did:03d},{dup},{esc(drive_id)}\n")
 
     data = buf.getvalue().encode("utf-8")
     filename = f"계근표_파일명_고객사_대조표_{datetime.now(KST).strftime('%Y%m%d')}.csv"
