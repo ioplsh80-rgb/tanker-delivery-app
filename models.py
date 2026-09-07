@@ -178,6 +178,27 @@ class DeliveryMessageRead(Base):
     last_read_at = Column(DateTime, default=datetime.utcnow)
 
 
+class PushLog(Base):
+    """알림 발송 기록.
+
+    예전에는 발송이 실패해도 아무 데도 남지 않아, 기사가 '알림이 안 온다'고 해도
+    서버가 보냈는지조차 알 수 없었다. 기기 한 대에 한 줄씩 남긴다.
+    등록된 기기가 아예 없는 경우도 남긴다 — 그게 가장 흔한 원인이라서.
+    """
+    __tablename__ = "push_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    title = Column(String(200))
+    body = Column(Text)
+    endpoint = Column(Text)              # 어느 기기로 보냈는지 (없으면 기기 미등록)
+    ok = Column(Boolean, default=False, index=True)
+    detail = Column(String(300))         # 실패 사유 또는 '성공'
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    user = relationship("User")
+
+
 class DeliveryNoticeAck(Base):
     """유의사항 확인(동의) 기록.
     stage=NULL: 배송지(고객사) 주의사항 / stage='loaded','unloaded': 단계별 안전 유의사항"""

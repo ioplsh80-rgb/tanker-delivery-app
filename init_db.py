@@ -96,6 +96,19 @@ with engine.connect() as conn:
         conn.rollback()
         print(f"⚠️ 안전 유의사항 출하/입하 분리 건너뜀: {e}")
 
+# ── 알림 발송 기록 정리 (오래된 것 삭제) ──────────────────
+# 기기 한 대에 한 줄씩 쌓이므로 오래 두면 계속 늘어난다. 90일이면 충분하다.
+with engine.connect() as conn:
+    try:
+        conn.execute(text(
+            "DELETE FROM push_logs WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '90 days'"
+            if str(engine.url).startswith("postgresql")
+            else "DELETE FROM push_logs WHERE created_at < datetime('now', '-90 days')"))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"⚠️ 알림 기록 정리 건너뜀: {e}")
+
 db = SessionLocal()
 
 # ── 사용자 ──────────────────────────────────────────────
