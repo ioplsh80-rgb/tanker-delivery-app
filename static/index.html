@@ -392,6 +392,7 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
     <button class="tab-btn" onclick="switchTab('companies', this)">🏢 고객사 관리</button>
     <button class="tab-btn" onclick="switchTab('stagenotices', this)">🛡️ 안전 유의사항</button>
     <button class="tab-btn" onclick="switchTab('users', this)">⚙️ 사용자 관리</button>
+    <button class="tab-btn" onclick="switchTab('pushlogs', this)">🔔 알림 기록</button>
   </div>
 
   <!-- 기사 탭 -->
@@ -553,9 +554,12 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         <button class="btn btn-primary btn-sm" onclick="openAddUserModal()">+ 사용자 추가</button>
       </div>
       <div id="userTableWrap"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
+    </div>
 
-      <div class="section-header" style="margin-top:28px;">
-        <h3>🔔 알림 발송 기록</h3>
+    <!-- 관리자: 알림 발송 기록 -->
+    <div id="tab-pushlogs" class="hidden">
+      <div class="section-header">
+        <h3>알림 발송 기록</h3>
         <div style="display:flex;gap:8px;align-items:center;">
           <label style="font-size:13px;color:#6b7280;display:flex;align-items:center;gap:4px;cursor:pointer;">
             <input type="checkbox" id="pushLogOnlyFailed" onchange="loadPushLogs()"> 실패만 보기
@@ -1383,7 +1387,7 @@ async function initApp() {
     await Promise.all([loadItems(), loadCompanies()]);
     // 일반 관리자는 관리 탭 숨기기
     if (currentUser.role !== 'superadmin') {
-      ['vehicles','items','companies','stagenotices','users'].forEach(t => {
+      ['vehicles','items','companies','stagenotices','users','pushlogs'].forEach(t => {
         const btn = document.querySelector(`[onclick="switchTab('${t}', this)"]`);
         if (btn) btn.style.display = 'none';
       });
@@ -1399,7 +1403,7 @@ async function initApp() {
     document.getElementById('driverTabs').classList.remove('hidden');
     document.getElementById('headerTitle').textContent = '기사 배송 현황';
     // 관리자용 화면(대시보드 등)을 전부 숨기고 기사 화면만 표시
-    ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','myHistory'].forEach(t => {
+    ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','pushlogs','myHistory'].forEach(t => {
       const el = document.getElementById('tab-' + t);
       if (el) el.classList.add('hidden');
     });
@@ -1426,7 +1430,7 @@ if (currentUser) { initApp(); }  // 쿠키가 만료됐으면 첫 API 호출의 
 // 탭 전환
 // ═══════════════════════════════════════════════════
 function switchTab(name, btn) {
-  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','myDeliveries','myHistory'];
+  const allTabs = ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','pushlogs','myDeliveries','myHistory'];
   allTabs.forEach(t => { const el = document.getElementById('tab-' + t); if (el) el.classList.add('hidden'); });
   document.getElementById('tab-' + name).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1440,7 +1444,8 @@ function switchTab(name, btn) {
   else if (name === 'items')      loadItemTab();
   else if (name === 'companies')  loadCompanyTab();
   else if (name === 'stagenotices') loadStageNoticeTab();
-  else if (name === 'users')      { loadUsers(); loadPushLogs(); }
+  else if (name === 'users')      loadUsers();
+  else if (name === 'pushlogs')   loadPushLogs();
   else if (name === 'myDeliveries') loadMyDeliveries();
   else if (name === 'myHistory')  { initHistoryFilter(); loadMyHistory(); }
 }
