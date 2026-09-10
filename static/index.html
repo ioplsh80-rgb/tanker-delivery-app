@@ -840,6 +840,7 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
           <label>역할 *</label>
           <select id="u-role">
             <option value="admin">관리자</option>
+            <option value="observer">영업 (열람 전용)</option>
             <option value="superadmin">슈퍼관리자</option>
           </select>
         </div>
@@ -1220,6 +1221,10 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
 // 인증 토큰은 HttpOnly 쿠키로 관리 (자바스크립트 접근 불가)
 localStorage.removeItem('token');  // 예전 방식 토큰 정리
 let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+// 영업 담당자용 열람 전용 계정. 전체 배송건을 보고 대화에는 글을 쓸 수 있지만
+// 그 밖의 것(상태 변경·배차·수정·계근표 등록)은 하지 못한다.
+function isObserver() { return currentUser && currentUser.role === 'observer'; }
 let drivers = [];
 let itemsList = [];
 let companiesList = [];
@@ -1379,12 +1384,17 @@ async function initApp() {
   document.getElementById('appPage').classList.remove('hidden');
   document.getElementById('headerUser').textContent = currentUser.name;
 
-  if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+  if (currentUser.role === 'admin' || currentUser.role === 'superadmin' || isObserver()) {
     document.getElementById('adminTabs').classList.remove('hidden');
-    document.getElementById('headerTitle').textContent = currentUser.role === 'superadmin' ? '슈퍼관리자 대시보드' : '관리자 대시보드';
+    document.getElementById('driverTabs').classList.add('hidden');
+    document.getElementById('headerTitle').textContent =
+      currentUser.role === 'superadmin' ? '슈퍼관리자 대시보드'
+      : isObserver() ? '영업 열람 화면' : '관리자 대시보드';
     currentTab = 'dashboard';
     await loadDrivers();
     await Promise.all([loadItems(), loadCompanies()]);
+    // 역할이 바뀌어 다시 들어온 경우를 대비해 숨김 표시를 먼저 되돌린다
+    document.querySelectorAll('#adminTabs .tab-btn').forEach(b => { b.style.display = ''; });
     // 일반 관리자는 관리 탭 숨기기
     if (currentUser.role !== 'superadmin') {
       ['vehicles','items','companies','stagenotices','users','pushlogs'].forEach(t => {
@@ -1393,7 +1403,9 @@ async function initApp() {
       });
     }
     // 배송 카드 생성 버튼: superadmin, admin, can_create_delivery 권한자 표시
-    const canCreate = currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery;
+    // 영업(열람 전용)은 어떤 경우에도 만들 수 없다
+    const canCreate = !isObserver() &&
+      (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery);
     ['btnOpenAssign','btnOpenAssign2'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = canCreate ? '' : 'none';
@@ -1401,6 +1413,9 @@ async function initApp() {
     await loadDashboard();
   } else {
     document.getElementById('driverTabs').classList.remove('hidden');
+    // 로그아웃 후 다른 역할로 로그인하면 새로고침 없이 화면만 바꾼다.
+    // 관리자 탭 막대를 안 숨기면 기사 화면에 그대로 남아 있었다.
+    document.getElementById('adminTabs').classList.add('hidden');
     document.getElementById('headerTitle').textContent = '기사 배송 현황';
     // 관리자용 화면(대시보드 등)을 전부 숨기고 기사 화면만 표시
     ['dashboard','deliveries','drivers','vehicles','items','companies','stagenotices','users','pushlogs','myHistory'].forEach(t => {
@@ -2570,6 +2585,7 @@ function driverNextButton(d) {
 }
 
 function buildCardActions(d, mode) {
+  if (isObserver()) return '';   // 영업(열람 전용)은 카드에서 아무것도 바꾸지 못한다
   const revert = `<button class="btn btn-warning btn-sm" onclick="revertStatus(${d.id})">↩️ 되돌리기</button>`;
 
   if (mode === 'admin') {
@@ -2990,6 +3006,12 @@ function renderDetail(d) {
   loadStageAckStatus(d);
 
   let footer = `<button class="btn btn-gray" onclick="closeModal('detailModal')">닫기</button>`;
+
+  // 영업(열람 전용)은 닫기만 — 아래 버튼을 하나도 붙이지 않는다
+  if (isObserver()) {
+    document.getElementById('detailFooter').innerHTML = footer;
+    return;
+  }
 
   // 수정 버튼 (배송정보 권한자)
   if ((currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
@@ -3494,8 +3516,8 @@ async function loadUsers() {
   document.getElementById('userTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
     const users = await api('GET', '/users/');
-    const roleLabel = {superadmin:'슈퍼관리자', admin:'관리자', driver:'기사'};
-    const roleBadge = {superadmin:'badge-done', admin:'badge-departed', driver:'badge-wait'};
+    const roleLabel = {superadmin:'슈퍼관리자', admin:'관리자', observer:'영업 (열람 전용)', driver:'기사'};
+    const roleBadge = {superadmin:'badge-done', admin:'badge-departed', observer:'badge-unloaded', driver:'badge-wait'};
     const adminUsers = users.filter(u => u.role !== 'driver');
     const rows = adminUsers.map(u => `
       <tr>
@@ -3507,10 +3529,10 @@ async function loadUsers() {
         <td>${escapeHtml(u.phone || '-')}</td>
         <td>${escapeHtml(u.email || '-')}</td>
         <td style="text-align:center;">
-          <input type="checkbox" ${u.can_create_delivery?'checked':''} onchange="updatePermission(${u.id},'can_create_delivery',this.checked)" ${u.role==='superadmin'?'disabled':''}>
+          <input type="checkbox" ${u.can_create_delivery?'checked':''} onchange="updatePermission(${u.id},'can_create_delivery',this.checked)" ${(u.role==='superadmin'||u.role==='observer')?'disabled':''}>
         </td>
         <td style="text-align:center;">
-          <input type="checkbox" ${u.can_assign_vehicle?'checked':''} onchange="updatePermission(${u.id},'can_assign_vehicle',this.checked)" ${u.role==='superadmin'?'disabled':''}>
+          <input type="checkbox" ${u.can_assign_vehicle?'checked':''} onchange="updatePermission(${u.id},'can_assign_vehicle',this.checked)" ${(u.role==='superadmin'||u.role==='observer')?'disabled':''}>
         </td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditUserModal(${u.id},'${escArg(u.name)}','${escArg(u.department)}','${escArg(u.phone)}','${escArg(u.email)}')">수정</button>

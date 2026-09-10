@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 KST = timezone(timedelta(hours=9))
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import func, or_
+from sqlalchemy import false as sa_false, func, or_
 from sqlalchemy.orm import Session
 
 import models
@@ -170,6 +170,15 @@ FLOW = ["wait", "start", "loaded", "unloaded", "weighed", "done"]
 
 ADMIN_ROLES = ("admin", "superadmin")
 
+# 영업 담당자용 열람 전용 역할. 전체 배송건을 보고 대화에는 글을 쓸 수 있지만
+# 그 밖의 것은 바꾸지 못한다.
+OBSERVER_ROLE = "observer"
+
+
+def _forbid_observer(current_user: models.User, what: str):
+    if current_user.role == OBSERVER_ROLE:
+        raise HTTPException(status_code=403, detail=f"열람 전용 계정은 {what}.")
+
 STATUS_LABELS = {
     "wait": "대기중", "start": "업무시작", "loaded": "상차",
     "unloaded": "하차", "weighed": "계근표 등록", "done": "완료", "cancel": "취소",
@@ -222,11 +231,16 @@ def _apply_visibility_filter(query, db: Session, current_user: models.User):
             models.Delivery.created_by == current_user.id,
             models.Delivery.id.in_(visible_ids),
         ))
-    return query  # superadmin
+    if current_user.role in ("superadmin", "observer"):
+        return query          # observer(영업)는 전체를 보되 바꾸지는 못한다
+    # 알 수 없는 역할은 아무것도 보여주지 않는다.
+    # 예전에는 여기가 그냥 'return query' 여서, 역할을 하나 더 만들면
+    # 조용히 전체가 보이는 쪽으로 샜다.
+    return query.filter(sa_false())
 
 
 def _can_view_delivery(d: models.Delivery, db: Session, current_user: models.User) -> bool:
-    if current_user.role == "superadmin":
+    if current_user.role in ("superadmin", "observer"):
         return True
     if current_user.role == "driver":
         return d.driver_id == current_user.id
@@ -597,6 +611,7 @@ def update_status(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
+    _forbid_observer(current_user, "배송 상태를 바꿀 수 없습니다")
 
     # 기사는 7일 이내 배송만 수정 가능
     if current_user.role == "driver":
@@ -743,6 +758,7 @@ async def upload_photos(
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
+    _forbid_observer(current_user, "계근표를 등록할 수 없습니다")
 
     # 하차 상태에서만 계근표 등록 가능 (등록 시 계근표등록→완료로 자동 전환)
     if d.status != "unloaded":

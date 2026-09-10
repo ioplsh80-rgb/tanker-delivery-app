@@ -12,6 +12,9 @@ from routers.auth import (create_access_token, get_current_user,
 
 router = APIRouter()
 
+# observer: 영업 담당자용 열람 전용. 전체 배송건을 보고 대화에는 글을 쓸 수 있다.
+VALID_ROLES = ("superadmin", "admin", "observer", "driver")
+
 PASSWORD_MIN_LENGTH = 5
 
 
@@ -35,7 +38,7 @@ def get_drivers(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    if current_user.role not in ("admin", "superadmin"):
+    if current_user.role not in ("admin", "superadmin", "observer"):
         raise HTTPException(status_code=403, detail="관리자만 기사 목록을 조회할 수 있습니다.")
     return (
         db.query(models.User)
@@ -50,7 +53,7 @@ def get_admins(
     current_user: models.User = Depends(get_current_user),
 ):
     """관리자 목록 (배송카드 공개 대상 지정용) — 관리자만 조회 가능"""
-    if current_user.role not in ("admin", "superadmin"):
+    if current_user.role not in ("admin", "superadmin", "observer"):
         raise HTTPException(status_code=403, detail="관리자만 접근 가능합니다.")
     return (
         db.query(models.User)
@@ -68,6 +71,8 @@ def create_user(
 ):
     if current_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="슈퍼관리자만 사용자를 생성할 수 있습니다.")
+    if user.role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail=f"알 수 없는 역할입니다: {user.role}")
     if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디입니다.")
     _validate_password(user.password)
