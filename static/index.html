@@ -3531,6 +3531,38 @@ function syncRolePermissions() {
   if (box) box.style.opacity = isObs ? '.7' : '';
 }
 
+// 계정 완전 삭제 - 아무 데도 안 엮인 경우만 된다.
+// 실수로 잘못 만든 계정을 치우는 용도다. 배송·대화·동의 기록이 있으면
+// 서버가 거절하고, 그때는 '비활성화'를 써야 한다.
+async function deleteUser(id, name) {
+  let info;
+  try {
+    info = await api('GET', `/users/${id}/references`);
+  } catch (e) { showToast('⚠️ ' + e.message); return; }
+
+  const line = (o) => Object.entries(o || {}).map(([k, v]) => `· ${k} ${v}건`).join('\n');
+
+  const blocking = line(info.blocking);
+  if (blocking) {
+    alert(`'${name}' 계정은 삭제할 수 없습니다.` + '\n\n' + blocking
+        + '\n\n' + '지우면 이 기록들이 깨집니다.' + '\n'
+        + `대신 '비활성화'를 하시면 로그인만 막히고 기록은 남습니다.`);
+    return;
+  }
+
+  const removable = line(info.removable);
+  const extra = removable ? ('\n\n함께 지워지는 것:\n' + removable) : '';
+  const msg = `'${name}' 계정을 완전히 지웁니다.` + '\n' + '되돌릴 수 없습니다.'
+            + extra + '\n\n진행할까요?';
+  if (!confirm(msg)) return;
+
+  try {
+    await api('DELETE', `/users/${id}`);
+    showToast(`✅ '${name}' 계정을 삭제했습니다.`);
+    loadUsers();
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
 async function loadUsers() {
   document.getElementById('userTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
@@ -3556,7 +3588,8 @@ async function loadUsers() {
         <td style="white-space:nowrap;">
           <button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;margin-right:4px;" onclick="openEditUserModal(${u.id},'${escArg(u.name)}','${escArg(u.department)}','${escArg(u.phone)}','${escArg(u.email)}')">수정</button>
           ${u.id !== currentUser.id ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;margin-right:4px;" onclick="openChangePasswordModal(${u.id},'${escArg(u.name)}')">비밀번호</button>` : ''}
-          ${u.role !== 'superadmin' && u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.id},'${escArg(u.name)}')">비활성화</button>` : ''}
+          ${u.role !== 'superadmin' && u.id !== currentUser.id ? `<button class="btn btn-danger btn-sm" style="margin-right:4px;" onclick="deactivateUser(${u.id},'${escArg(u.name)}')">비활성화</button>` : ''}
+          ${u.role !== 'superadmin' && u.id !== currentUser.id ? `<button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;" onclick="deleteUser(${u.id},'${escArg(u.name)}')">삭제</button>` : ''}
         </td>
       </tr>
     `).join('');

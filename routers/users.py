@@ -194,3 +194,96 @@ def deactivate_user(
     user.is_active = False
     db.commit()
     return {"success": True}
+
+
+# ── 계정 완전 삭제 (아무 데도 안 엮인 경우만) ──────────────────────────────
+# 실수로 잘못 만든 계정을 치우기 위한 것이다.
+# 배송·대화·유의사항 동의처럼 '한 일'이 남아 있으면 지우지 않는다.
+# 지우면 지난 배송건의 기사 이름이 사라지고, 사고 때 근거가 되는 동의 기록이
+# 주인을 잃는다. 그런 계정은 '비활성화' 를 써야 한다.
+
+def _user_references(user_id: int, db: Session):
+    """계정이 어디에 얼마나 엮여 있는지. 지우면 안 되는 것과 같이 지울 것을 나눈다."""
+    D = models.Delivery
+    blocking = {
+        "담당한 배송": db.query(D).filter(D.driver_id == user_id).count(),
+        "만든 배송": db.query(D).filter(D.created_by == user_id).count(),
+        "배차한 배송": db.query(D).filter(D.assigned_by == user_id).count(),
+        "대화 글": db.query(models.DeliveryMessage).filter(
+            models.DeliveryMessage.user_id == user_id).count(),
+        "유의사항 동의 기록": db.query(models.DeliveryNoticeAck).filter(
+            models.DeliveryNoticeAck.user_id == user_id).count(),
+    }
+    # 아래는 '한 일'이 아니라 설정·기록이라 계정과 함께 지운다
+    removable = {
+        "배송카드 열람 지정": db.query(models.DeliveryViewer).filter(
+            models.DeliveryViewer.user_id == user_id).count(),
+        "대화 읽음 표시": db.query(models.DeliveryMessageRead).filter(
+            models.DeliveryMessageRead.user_id == user_id).count(),
+        "알림 기기 등록": db.query(models.PushSubscription).filter(
+            models.PushSubscription.user_id == user_id).count(),
+        "알림 발송 기록": db.query(models.PushLog).filter(
+            models.PushLog.user_id == user_id).count(),
+    }
+    return blocking, removable
+
+
+@router.get("/{user_id}/references")
+def user_references(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """지울 수 있는 계정인지 미리 알아본다 (지우지는 않는다)."""
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 확인할 수 있습니다.")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    blocking, removable = _user_references(user_id, db)
+    return {
+        "name": user.name,
+        "can_delete": sum(blocking.values()) == 0 and user.id != current_user.id
+                      and user.role != "superadmin",
+        "blocking": {k: v for k, v in blocking.items() if v},
+        "removable": {k: v for k, v in removable.items() if v},
+    }
+
+
+@router.delete("/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if current_user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="슈퍼관리자만 삭제할 수 있습니다.")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="본인 계정은 삭제할 수 없습니다.")
+    if user.role == "superadmin":
+        raise HTTPException(status_code=400, detail="슈퍼관리자 계정은 삭제할 수 없습니다.")
+
+    blocking, _ = _user_references(user_id, db)
+    left = {k: v for k, v in blocking.items() if v}
+    if left:
+        detail = ", ".join(f"{k} {v}건" for k, v in left.items())
+        raise HTTPException(
+            status_code=400,
+            detail=f"이 계정은 {detail}이 남아 있어 지울 수 없습니다. "
+                   f"기록이 깨지므로 '비활성화'를 사용해주세요.")
+
+    # 설정·기록만 함께 정리한다
+    for model, col in (
+        (models.DeliveryViewer, models.DeliveryViewer.user_id),
+        (models.DeliveryMessageRead, models.DeliveryMessageRead.user_id),
+        (models.PushSubscription, models.PushSubscription.user_id),
+        (models.PushLog, models.PushLog.user_id),
+    ):
+        db.query(model).filter(col == user_id).delete(synchronize_session=False)
+    name = user.name
+    db.delete(user)
+    db.commit()
+    return {"success": True, "name": name}
