@@ -320,6 +320,9 @@ def create_delivery(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    # 권한 플래그가 켜져 있어도 열람 전용 계정은 만들 수 없다.
+    # 플래그만 보면, 영업 계정에 실수로 권한을 켰을 때 그대로 통과한다.
+    _forbid_observer(current_user, "배송 카드를 만들 수 없습니다")
     if current_user.role != "superadmin" and not current_user.can_create_delivery:
         raise HTTPException(status_code=403, detail="배송 카드 생성 권한이 없습니다.")
 
@@ -646,6 +649,7 @@ def assign_vehicle(
     current_user: models.User = Depends(get_current_user),
 ):
     """배차 권한자: 기사/차량 배정"""
+    _forbid_observer(current_user, "배차할 수 없습니다")
     if current_user.role != "superadmin" and not current_user.can_assign_vehicle:
         raise HTTPException(status_code=403, detail="배차 권한이 없습니다.")
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
@@ -696,6 +700,7 @@ def revert_status(
     current_user: models.User = Depends(get_current_user),
 ):
     """관리자 전용: 상태를 이전 단계로 되돌리기"""
+    _forbid_observer(current_user, "되돌릴 수 없습니다")
     if current_user.role != "superadmin" and not (current_user.can_create_delivery or current_user.can_assign_vehicle):
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
@@ -829,6 +834,7 @@ def edit_delivery(
     current_user: models.User = Depends(get_current_user),
 ):
     """배송정보 권한자: 배송 카드 내용 수정"""
+    _forbid_observer(current_user, "배송 정보를 고칠 수 없습니다")
     if current_user.role != "superadmin" and not current_user.can_create_delivery:
         raise HTTPException(status_code=403, detail="배송 정보 수정 권한이 없습니다.")
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()

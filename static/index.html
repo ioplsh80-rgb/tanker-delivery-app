@@ -838,7 +838,7 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         </div>
         <div class="form-group">
           <label>역할 *</label>
-          <select id="u-role">
+          <select id="u-role" onchange="syncRolePermissions()">
             <option value="admin">관리자</option>
             <option value="observer">영업 (열람 전용)</option>
             <option value="superadmin">슈퍼관리자</option>
@@ -859,8 +859,11 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         <label>메일주소</label>
         <input type="email" id="u-email" placeholder="예: hong@company.com">
       </div>
-      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:8px;">
+      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-top:8px;" id="u-perm-box">
         <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">권한 설정</div>
+        <div id="u-perm-note" style="font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 10px;margin-bottom:8px;display:none;">
+          열람 전용 계정에는 줄 수 없는 권한입니다.
+        </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer;">
           <input type="checkbox" id="u-can-create"> 배송정보 입력 권한 (배송 카드 생성)
         </label>
@@ -3512,6 +3515,22 @@ async function loadPushLogs() {
   }
 }
 
+// 역할이 '영업(열람 전용)' 이면 권한 칸을 잠근다.
+// 예전에는 켤 수 있었고, 켜면 서버가 실제로 카드 생성·배차를 통과시켰다.
+function syncRolePermissions() {
+  const isObs = document.getElementById('u-role').value === 'observer';
+  ['u-can-create', 'u-can-assign'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (isObs) el.checked = false;
+    el.disabled = isObs;
+  });
+  const note = document.getElementById('u-perm-note');
+  if (note) note.style.display = isObs ? '' : 'none';
+  const box = document.getElementById('u-perm-box');
+  if (box) box.style.opacity = isObs ? '.7' : '';
+}
+
 async function loadUsers() {
   document.getElementById('userTableWrap').innerHTML = '<div class="loading"><span class="spinner"></span>불러오는 중...</div>';
   try {
@@ -3554,6 +3573,7 @@ function openAddUserModal() {
   document.getElementById('u-role').value = 'admin';
   document.getElementById('u-can-create').checked = false;
   document.getElementById('u-can-assign').checked = false;
+  syncRolePermissions();
   document.getElementById('addUserModal').classList.remove('hidden');
 }
 
@@ -3606,8 +3626,9 @@ async function submitAddUser() {
   const department = document.getElementById('u-department').value.trim();
   const phone      = document.getElementById('u-phone').value.trim();
   const email      = document.getElementById('u-email').value.trim();
-  const canCreate  = document.getElementById('u-can-create')?.checked || false;
-  const canAssign  = document.getElementById('u-can-assign')?.checked || false;
+  const isObs      = role === 'observer';
+  const canCreate  = !isObs && (document.getElementById('u-can-create')?.checked || false);
+  const canAssign  = !isObs && (document.getElementById('u-can-assign')?.checked || false);
   if (!name || !username || !password) { showToast('⚠️ 필수 항목을 입력해주세요.'); return; }
   try {
     await api('POST', '/users/', { name, username, password, role, department: department||null, phone: phone||null, email: email||null, can_create_delivery: canCreate, can_assign_vehicle: canAssign });

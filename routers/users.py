@@ -85,8 +85,9 @@ def create_user(
         department=user.department,
         email=user.email,
         phone=user.phone,
-        can_create_delivery=user.can_create_delivery,
-        can_assign_vehicle=user.can_assign_vehicle,
+        # 열람 전용 계정은 권한 플래그를 무시하고 끈 채로 만든다
+        can_create_delivery=False if user.role == "observer" else user.can_create_delivery,
+        can_assign_vehicle=False if user.role == "observer" else user.can_assign_vehicle,
         vehicle_number=user.vehicle_number,
         vehicle_type=user.vehicle_type,
     )
@@ -167,6 +168,10 @@ def update_permissions(
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    # 열람 전용 계정에는 이 권한들이 의미가 없다. 켜 두면 헷갈리기만 하고,
+    # 예전에는 켜면 실제로 카드 생성·배차가 통과했다.
+    if user.role == "observer":
+        raise HTTPException(status_code=400, detail="열람 전용 계정에는 이 권한을 줄 수 없습니다.")
     if body.can_create_delivery is not None:
         user.can_create_delivery = body.can_create_delivery
     if body.can_assign_vehicle is not None:
