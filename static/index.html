@@ -1483,6 +1483,7 @@ async function loadItems() {
     const sel = document.getElementById('f-item');
     sel.innerHTML = '<option value="">선택하세요</option>' +
       itemsList.map(i => `<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join('');
+    refreshCombo('f-item');
   } catch (e) { console.error(e); }
 }
 
@@ -3176,6 +3177,8 @@ function refreshCombo(selectId) {
 
 attachCombo('f-company',  '업체명 입력 또는 선택');
 attachCombo('ed-company', '업체명 입력 또는 선택');
+attachCombo('f-item',     '품목 입력 또는 선택');
+attachCombo('ed-item',    '품목 입력 또는 선택');
 attachCombo('av-driver',  '기사명·차량번호 입력 또는 선택');
 attachCombo('filterCompany', '전체 고객사', { includeEmpty: true });
 
@@ -3186,6 +3189,7 @@ function openAssignModal() {
   document.getElementById('f-company').value = '';
   refreshCombo('f-company');
   document.getElementById('f-item').value = '';
+  refreshCombo('f-item');
   document.getElementById('f-qty').value = '';
   document.getElementById('f-date').value = today;
   document.getElementById('f-time').value = '';
@@ -3362,6 +3366,7 @@ function openEditDeliveryModal(id) {
     itemsList.map(it => `<option value="${it.name}">${it.name}</option>`).join('');
   ensureOption(iSel, d.item_name);
   iSel.value = d.item_name || '';
+  refreshCombo('ed-item');
   document.getElementById('editDeliveryModal').classList.remove('hidden');
 }
 
