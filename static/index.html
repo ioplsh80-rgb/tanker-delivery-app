@@ -3417,10 +3417,59 @@ function openPhotoModal(id) {
   document.getElementById('photoModal').classList.remove('hidden');
 }
 
-function previewPhotos(e) {
-  Array.from(e.target.files).forEach(file => photoFiles.push(file));
+// 고르는 순간 사진을 앱 안에서 다시 만들어 들고 있는다.
+//
+// 휴대폰은 사진을 고른 뒤 시간이 지나면 원본을 정리해 버린다. 그러면 화면에는
+// 사진이 붙어 있는데 실제 내용은 사라져, 보낼 때 이름 없는 빈 조각이 전송되고
+// 서버가 422로 거절한다(기사에게는 '업로드 실패'로만 보였다).
+// 여기서 한 번 다시 만들어 두면 원본이 없어져도 영향을 받지 않는다.
+// 덤으로 크기가 줄어 업로드가 빨라진다. 계근표는 글자만 읽히면 된다.
+// 못 읽는 형식이면 원본을 그대로 쓴다 (지금과 같아질 뿐 더 나빠지지 않는다).
+const PHOTO_MAX_EDGE = 2000;     // 긴 변 기준 (계근표 글자는 충분히 읽힌다)
+const PHOTO_QUALITY = 0.85;
+
+async function normalizePhoto(file) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', PHOTO_QUALITY));
+    if (!blob || !blob.size) return file;
+    const base = (file.name || 'photo').replace(/\.[^.]+$/, '');
+    return new File([blob], base + '.jpg', { type: 'image/jpeg' });
+  } catch (e) {
+    return file;
+  }
+}
+
+async function previewPhotos(e) {
+  const picked = Array.from(e.target.files);
   e.target.value = '';   // 같은 사진을 다시 고를 수 있도록 비움
+  if (!picked.length) return;
+  const btn = document.getElementById('completeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '사진 준비 중...'; }
+  try {
+    for (const f of picked) photoFiles.push(await normalizePhoto(f));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ 완료 처리'; }
+  }
   renderPhotoPreview();
+}
+
+// 붙여둔 사진이 아직 읽히는지 확인한다. 휴대폰이 원본을 놓쳤으면 여기서 걸린다.
+async function findBrokenPhotos(list) {
+  const broken = [];
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (!f || !f.name || !f.size) { broken.push(i + 1); continue; }
+    try { await f.slice(0, 1).arrayBuffer(); }
+    catch (err) { broken.push(i + 1); }
+  }
+  return broken;
 }
 
 // 목록이 바뀔 때마다 전체를 다시 그린다.
@@ -3446,6 +3495,18 @@ async function submitComplete() {
   if (photoFiles.length === 0) { showToast('⚠️ 사진을 1장 이상 첨부해주세요.'); return; }
   const memo = document.getElementById('completeMemo').value.trim();
   const btn = document.getElementById('completeBtn');
+
+  // 보내기 전에 사진이 멀쩡한지 본다. 깨진 채로 보내면 서버가 거절하고,
+  // 기사는 왜 안 되는지 알 수 없다.
+  const broken = await findBrokenPhotos(photoFiles);
+  if (broken.length) {
+    alert('사진을 다시 첨부해주세요.'
+        + '\n\n' + `${broken.join(', ')}번째 사진을 휴대폰이 놓쳤습니다.`
+        + '\n' + '사진을 고른 뒤 시간이 지나면 생길 수 있습니다.'
+        + '\n\n' + '사진 오른쪽 위 ✕ 로 빼고 다시 첨부한 뒤 완료를 눌러주세요.');
+    return;
+  }
+
   btn.disabled = true; btn.textContent = '업로드 중...';
   try {
     const form = new FormData();
@@ -3809,8 +3870,15 @@ async function sendChatMessage() {
 
 async function sendChatPhoto(fileInput) {
   if (!fileInput.files || !fileInput.files[0] || !chatDeliveryId) return;
+  // 계근표와 같은 이유로 여기서도 한 번 다시 만들어 보낸다
+  const photo = await normalizePhoto(fileInput.files[0]);
+  if (!photo || !photo.name || !photo.size) {
+    fileInput.value = '';
+    showToast('⚠️ 사진을 다시 골라주세요. 휴대폰이 사진을 놓쳤습니다.');
+    return;
+  }
   const fd = new FormData();
-  fd.append('file', fileInput.files[0]);
+  fd.append('file', photo);
   const textInput = document.getElementById('chat-input');
   const text = textInput ? textInput.value.trim() : '';
   if (text) fd.append('content', text);

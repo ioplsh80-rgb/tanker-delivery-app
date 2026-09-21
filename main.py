@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import models
 from database import engine
@@ -11,6 +13,21 @@ from routers import (auth, deliveries, users, exports, items, companies,
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="탱크로리 배송 관리 시스템", version="1.0.0", redirect_slashes=False)
+
+
+# 사진 첨부가 잘못 전달됐을 때 알아들을 수 있게 알려준다.
+# 휴대폰에서 사진을 고른 뒤 시간이 지나면 원본이 정리되어, 이름 없는 빈 조각이
+# 전송된다. 그러면 서버는 파일이 아닌 글자로 받아 422로 거절하는데, 기본 문구가
+# 영어 기술 용어라 기사에게는 '업로드 실패' 로만 보였다.
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    if any("file" in str(e.get("loc", "")).lower() for e in errors):
+        msg = ("사진을 다시 첨부해주세요. 사진을 고른 뒤 시간이 지나 "
+               "휴대폰이 사진을 놓친 것 같습니다. (사진을 빼고 다시 첨부해주세요)")
+    else:
+        msg = "입력한 내용을 확인해주세요."
+    return JSONResponse(status_code=422, content={"detail": msg, "errors": jsonable_encoder(errors)})
 
 # 쿠키 인증 사용으로 출처를 자체 도메인으로 제한 (와일드카드 + 쿠키 조합은 위험)
 app.add_middleware(
