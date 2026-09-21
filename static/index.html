@@ -1783,6 +1783,9 @@ function renderCompanyTable() {
 function openAddCompanyModal() {
   ['c-name','c-address','c-contact-name','c-contact-phone','c-contact-email','c-notes'].forEach(id => document.getElementById(id).value = '');
   clearNewCompanyNotices();
+  // 공통 주의사항을 미리 채워둔다 (그대로 저장하거나 고쳐서 저장하면 된다)
+  DEFAULT_COMPANY_NOTICES.forEach(content =>
+    newCompanyNotices.push({ content, file: null, previewUrl: null }));
   renderNewCompanyNotices();
   document.getElementById('addCompanyModal').classList.remove('hidden');
 }
@@ -2004,6 +2007,22 @@ function addNoticeRow() {
 // 수정 화면에서는 주의사항 한 줄마다 바로 서버에 저장하지만, 추가 화면에는
 // 아직 고객사가 없어 붙일 곳이 없다. 그래서 화면에 모아두었다가 고객사를
 // 만든 직후에 한꺼번에 등록한다.
+// 새 고객사를 만들 때 기본으로 채워 넣는 주의사항.
+// 모든 고객사에 공통으로 들어가던 것이라, 매번 손으로 적지 않도록 미리 넣어준다.
+// 등록 화면에서 고치거나 지울 수 있다. 문구를 바꾸려면 여기만 고치면 된다.
+const DEFAULT_COMPANY_NOTICES = [
+`운행 전 점검사항- 차량 기본 점검
+1. 타이어 휠 상태(공기압, 휠 너트 풀림 포함)
+2. 제동,현가장치(브레이크, 축 스프링 포함)
+3. 동화장치(전조등, 후미등, 방향지시등 포함)
+4. 기타 안전장치(경적, 와이퍼, 블랙박스 포함)`,
+`탱크로리 점검
+1. 밸브.배관.호스 상태(배출밸브 잠감, 배관누출, 호스손상. 캡 체결 포함)
+2. 펌프 작동 상태
+3. 안전장비 비치(접지선, 소화기, 방제용품 포함)
+4. 보호구 착용 상태`,
+];
+
 let newCompanyNotices = [];        // [{ content, file, previewUrl }]
 
 function clearNewCompanyNotices() {
