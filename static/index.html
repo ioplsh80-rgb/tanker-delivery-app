@@ -468,6 +468,8 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
         </select>
         <input type="date" id="filterDateFrom" onchange="loadDeliveries()">
         <input type="date" id="filterDateTo" onchange="loadDeliveries()">
+        <button class="btn btn-outline btn-sm" onclick="clearDeliveryDateFilter()"
+                title="처음부터 지금까지 전부 봅니다">📅 전체 기간</button>
       </div>
       <div class="delivery-list" id="deliveryList"><div class="loading"><span class="spinner"></span>불러오는 중...</div></div>
     </div>
@@ -1456,7 +1458,7 @@ function switchTab(name, btn) {
   currentTab = name;
 
   if (name === 'dashboard')    loadDashboard();
-  else if (name === 'deliveries') { loadDriverFilterOptions(); loadDeliveries(); }
+  else if (name === 'deliveries') { applyDefaultDateFilter(); loadDriverFilterOptions(); loadDeliveries(); }
   else if (name === 'drivers')    loadDriverStatus();
   else if (name === 'vehicles')   loadVehicleTab();
   else if (name === 'items')      loadItemTab();
@@ -2247,6 +2249,29 @@ function loadDriverFilterOptions() {
   const sel = document.getElementById('filterDriver');
   sel.innerHTML = '<option value="">전체 기사</option>' +
     drivers.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
+}
+
+// 배송 목록의 기본 기간: 최근 1개월.
+// 예전에는 조건 없이 처음부터 전부 가져와, 배송건이 쌓일수록 느려졌다.
+// 끝 날짜는 비워둔다 — 앞으로 잡힌 배송도 보여야 하기 때문이다.
+// 한 번만 맞춘다. 사용자가 기간을 넓혀두었는데 탭을 옮길 때마다 되돌리면 불편하다.
+let deliveryDateDefaultApplied = false;
+
+function applyDefaultDateFilter() {
+  if (deliveryDateDefaultApplied) return;
+  deliveryDateDefaultApplied = true;
+  const from = document.getElementById('filterDateFrom');
+  if (!from || from.value) return;          // 이미 넣어둔 값이 있으면 건드리지 않는다
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  from.value = localDateStr(d);
+}
+
+// 기간 제한을 풀고 처음부터 전부 본다
+function clearDeliveryDateFilter() {
+  document.getElementById('filterDateFrom').value = '';
+  document.getElementById('filterDateTo').value = '';
+  loadDeliveries();
 }
 
 async function loadDeliveries() {

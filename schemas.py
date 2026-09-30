@@ -246,3 +246,35 @@ class DeliveryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DeliveryListResponse(BaseModel):
+    """배송 목록용. 사진과 열람지정은 목록 화면이 쓰지 않으므로 빼서 보낸다.
+
+    이 둘은 배송건마다 따로 찾아와야 해서, 1400건이면 헛되이 2800번을 더
+    조회했다. 상세 화면은 그 배송건을 따로 불러오므로 종전대로 다 나온다.
+    """
+    id: int
+    company: str
+    destination: str
+    item_name: str
+    quantity: int
+    driver_id: Optional[int]
+    vehicle_number: Optional[str]
+    scheduled_date: str
+    delivery_time: Optional[str] = None
+    delivery_type: str = "출하"
+    notes: Optional[str]
+    status: str
+    work_start_time: Optional[str] = None
+    loading_complete_time: Optional[str]
+    unloaded_time: Optional[str]
+    weighed_time: Optional[str] = None
+    complete_time: Optional[str]
+    complete_memo: Optional[str]
+    created_at: datetime
+    created_by: Optional[int] = None
+    driver_user: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True

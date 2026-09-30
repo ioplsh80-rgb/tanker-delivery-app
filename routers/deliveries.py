@@ -10,7 +10,7 @@ KST = timezone(timedelta(hours=9))
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import false as sa_false, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 import models
 import schemas
@@ -267,7 +267,7 @@ def _notify_targets(d: models.Delivery, exclude_user_id: int):
     return list(targets)
 
 
-@router.get("/", response_model=List[schemas.DeliveryResponse])
+@router.get("/", response_model=List[schemas.DeliveryListResponse])
 def get_deliveries(
     status: Optional[str] = None,
     driver_id: Optional[int] = None,
@@ -305,7 +305,9 @@ def get_deliveries(
         query = query.filter(models.Delivery.scheduled_date <= date_to)
 
     return (
-        query.order_by(
+        # 기사 정보는 한 번에 같이 가져온다 (건마다 따로 물어보지 않도록)
+        query.options(selectinload(models.Delivery.driver_user))
+        .order_by(
             models.Delivery.driver_id.isnot(None),      # 배차 미등록 카드를 최상단에
             models.Delivery.scheduled_date.desc(),      # 그 다음 최신 날짜순
             models.Delivery.delivery_time,              # 같은 날짜는 이른 시간순
