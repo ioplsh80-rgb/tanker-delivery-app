@@ -23,6 +23,7 @@ migrations = [
     ("users", "vehicle_number",     "VARCHAR(20)"),
     ("users", "vehicle_type",       "VARCHAR(50)"),
     ("users", "token_valid_from",   "TIMESTAMP"),
+    ("users", "push_enabled",       "BOOLEAN DEFAULT TRUE"),
     # companies 테이블
     ("companies", "contact_name",   "VARCHAR(100)"),
     ("companies", "contact_email",  "VARCHAR(200)"),

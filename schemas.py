@@ -102,6 +102,7 @@ class UserBase(BaseModel):
     phone: Optional[str] = None
     can_create_delivery: bool = False
     can_assign_vehicle: bool = False
+    push_enabled: bool = True
     vehicle_id: Optional[int] = None
     vehicle_number: Optional[str] = None
     vehicle_type: Optional[str] = None

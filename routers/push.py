@@ -204,6 +204,11 @@ def send_push_to_users(user_ids, title: str, message: str, url: str = "/"):
         for uid in set(user_ids):
             if uid is None:
                 continue
+            u = db.query(models.User).filter(models.User.id == uid).first()
+            if u is not None and u.push_enabled is False:
+                # 고장이 아니라 본인이 꺼둔 것. 기록에 이유를 남겨 둘을 구분한다.
+                log(uid, None, False, "본인이 알림을 꺼둠")
+                continue
             subs = db.query(models.PushSubscription).filter(
                 models.PushSubscription.user_id == uid).all()
             if not subs:
@@ -297,3 +302,31 @@ def push_logs(
                            if r.created_at else ""),
         } for r in rows],
     }
+
+
+# ── 본인 알림 켜고 끄기 ────────────────────────────────────────────────────
+class PushToggleBody(BaseModel):
+    enabled: bool
+
+
+@router.get("/my-status")
+def my_push_status(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """내 알림이 켜져 있는지, 등록된 기기가 몇 대인지."""
+    devices = db.query(models.PushSubscription).filter(
+        models.PushSubscription.user_id == current_user.id).count()
+    return {"enabled": current_user.push_enabled is not False, "devices": devices}
+
+
+@router.post("/my-toggle")
+def toggle_my_push(
+    body: PushToggleBody,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """본인 알림을 켜거나 끈다. 기기 등록은 그대로 두어 다시 켤 때 바로 된다."""
+    current_user.push_enabled = body.enabled
+    db.commit()
+    return {"success": True, "enabled": body.enabled}

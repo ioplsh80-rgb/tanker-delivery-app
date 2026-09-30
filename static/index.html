@@ -376,7 +376,7 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
     </div>
     <div class="header-right">
       <span class="header-user" id="headerUser"></span>
-      <button class="logout-btn hidden" id="btnEnablePush" onclick="enablePush()">🔔 알림 켜기</button>
+      <button class="logout-btn hidden" id="btnEnablePush" onclick="togglePush()">🔔 알림 켜기</button>
       <button class="logout-btn" onclick="openMyPasswordModal()">🔑 비밀번호</button>
       <button class="logout-btn" onclick="doLogout()">로그아웃</button>
     </div>
@@ -4095,6 +4095,7 @@ async function subscribePush() {
 let lastPushSync = 0;
 async function syncPushSubscription() {
   if (!currentUser || !pushSupported()) return;
+  if (currentUser.push_enabled === false) return;   // 본인이 꺼뒀으면 되살리지 않는다
   if (Notification.permission !== 'granted') return;
   if (Date.now() - lastPushSync < 60000) return;
   lastPushSync = Date.now();
@@ -4106,6 +4107,14 @@ async function enablePush() {
   try {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { showToast('⚠️ 알림 권한이 거부되었습니다. 휴대폰 설정에서 허용해주세요.'); return; }
+    // 껐다가 다시 켜는 경우를 위해 계정 쪽도 켬으로 돌려놓는다
+    try {
+      await api('POST', '/push/my-toggle', { enabled: true });
+      if (currentUser) {
+        currentUser.push_enabled = true;
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      }
+    } catch (e) {}
     await subscribePush();
     // 진단 겸 테스트 알림 발송 (기기별 상세 결과 표시)
     const r = await api('POST', '/push/test');
@@ -4119,21 +4128,57 @@ async function enablePush() {
     } else {
       showToast(`🔔 테스트 알림 발송 성공 (기기 ${r.devices}대). 잠시 후 알림을 확인하세요.`);
     }
-    document.getElementById('btnEnablePush').textContent = '🔔 알림 테스트';
+    renderPushButton();
   } catch (e) { showToast('⚠️ 알림 설정 실패: ' + (e.message || '')); }
 }
 
-// 로그인 후 호출: 권한 상태에 따라 자동 구독, 버튼은 항상 표시 (테스트 용도)
-async function initPush() {
+// 버튼 표시를 지금 상태에 맞춘다
+function renderPushButton() {
   const btn = document.getElementById('btnEnablePush');
+  if (!btn) return;
   if (!pushSupported()) { btn.classList.add('hidden'); return; }
   btn.classList.remove('hidden');
-  if (Notification.permission === 'granted') {
+  const on = currentUser && currentUser.push_enabled !== false
+             && Notification.permission === 'granted';
+  btn.textContent = on ? '🔕 알림 끄기' : '🔔 알림 켜기';
+  btn.title = on ? '누르면 이 계정으로 알림이 오지 않습니다'
+                 : '누르면 알림을 받고, 잘 오는지 시험 알림을 보냅니다';
+}
+
+// 로그인 후 호출: 꺼둔 상태가 아니면 기기를 등록해 둔다
+async function initPush() {
+  if (!pushSupported()) { renderPushButton(); return; }
+  if (currentUser && currentUser.push_enabled !== false
+      && Notification.permission === 'granted') {
     try { await subscribePush(); } catch (e) {}
-    btn.textContent = '🔔 알림 테스트';
-  } else {
-    btn.textContent = '🔔 알림 켜기';
   }
+  renderPushButton();
+}
+
+// 버튼을 누르면 켜거나 끈다
+async function togglePush() {
+  const on = currentUser && currentUser.push_enabled !== false
+             && Notification.permission === 'granted';
+  if (on) return disablePush();
+  return enablePush();
+}
+
+// 알림 끄기 — 기기 등록은 그대로 두어 다시 켤 때 바로 되게 한다
+async function disablePush() {
+  if (!confirm('알림을 끕니다.'
+      + '\n\n' + '배차·계근표·대화 알림을 받지 못합니다.'
+      + '\n' + '같은 버튼을 다시 누르면 켜집니다.'
+      + '\n\n' + '끄시겠습니까?')) return;
+  const btn = document.getElementById('btnEnablePush');
+  btn.disabled = true;
+  try {
+    await api('POST', '/push/my-toggle', { enabled: false });
+    currentUser.push_enabled = false;
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    renderPushButton();
+    showToast('🔕 알림을 껐습니다. 필요하면 같은 버튼으로 다시 켤 수 있습니다.');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+  finally { btn.disabled = false; }
 }
 
 // 모달 바깥 클릭 시 닫기
