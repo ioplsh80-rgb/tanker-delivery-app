@@ -2251,10 +2251,11 @@ function loadDriverFilterOptions() {
     drivers.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
 }
 
-// 배송 목록의 기본 기간: 최근 1개월.
+// 배송 목록의 기본 기간: 어제부터.
 // 예전에는 조건 없이 처음부터 전부 가져와, 배송건이 쌓일수록 느려졌다.
 // 끝 날짜는 비워둔다 — 앞으로 잡힌 배송도 보여야 하기 때문이다.
 // 한 번만 맞춘다. 사용자가 기간을 넓혀두었는데 탭을 옮길 때마다 되돌리면 불편하다.
+const DELIVERY_DEFAULT_DAYS_BACK = 1;     // 며칠 전부터 보일지
 let deliveryDateDefaultApplied = false;
 
 function applyDefaultDateFilter() {
@@ -2263,7 +2264,7 @@ function applyDefaultDateFilter() {
   const from = document.getElementById('filterDateFrom');
   if (!from || from.value) return;          // 이미 넣어둔 값이 있으면 건드리지 않는다
   const d = new Date();
-  d.setMonth(d.getMonth() - 1);
+  d.setDate(d.getDate() - DELIVERY_DEFAULT_DAYS_BACK);
   from.value = localDateStr(d);
 }
 
