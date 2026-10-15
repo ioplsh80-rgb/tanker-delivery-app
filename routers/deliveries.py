@@ -711,12 +711,17 @@ def revert_status(
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
 
-    # 취소 철회: 취소 상태는 대기중으로 복구
+    # 취소 철회: 대기중으로 복구하되 배차는 비운다.
+    # 취소된 뒤 그 기사가 다른 일을 맡았을 수 있어, 옛 배차를 그대로 되살리면
+    # 엉뚱한 기사에게 배송이 붙는다. 되살린 뒤 다시 배차하는 것이 맞다.
     if d.status == "cancel":
         d.status = "wait"
+        d.driver_id = None
+        d.vehicle_number = None
+        d.assigned_by = None
         d.updated_at = datetime.utcnow()
         db.commit()
-        return {"success": True, "new_status": "wait"}
+        return {"success": True, "new_status": "wait", "driver_cleared": True}
 
     if d.status not in FLOW:
         raise HTTPException(status_code=400, detail="되돌릴 수 없는 상태입니다.")
