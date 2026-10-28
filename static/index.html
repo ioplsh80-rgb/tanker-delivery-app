@@ -212,10 +212,12 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
 .dtable tbody tr:hover td { background: #f8fafc; cursor: pointer; }
 .dtable .stick { position: sticky; z-index: 1; }
 .dtable th.stick { z-index: 3; }
+/* 왼쪽에 고정하는 세 칸: 번호 · 배송날짜 · 업체명.
+   칸 폭은 내용에 따라 달라지므로(D042 → D12345) 실제 폭을 재서 다음 칸을 붙인다.
+   고정값을 쓰면 번호가 길어질 때 뒷 칸이 앞 칸 위로 겹쳐 올라온다. */
 .dtable .c1 { left: 0; min-width: 64px; }
-/* 번호 칸 폭은 자릿수에 따라 달라지므로(D042 → D12345) 실제 폭을 재서 넣는다.
-   고정값을 쓰면 번호가 길어질 때 업체명 칸이 번호 위로 겹쳐 올라온다. */
-.dtable .c2 { left: var(--c1w, 64px); min-width: 132px; box-shadow: 2px 0 4px -2px rgba(0,0,0,.15); }
+.dtable .c2 { left: var(--c1w, 64px); min-width: 96px; }
+.dtable .c3 { left: var(--c12w, 160px); min-width: 132px; box-shadow: 2px 0 4px -2px rgba(0,0,0,.15); }
 .dtable .num { font-weight: 700; color: #1e3a5f; }
 .dtable .right { text-align: right; }
 .dtable .muted { color: #9ca3af; }
@@ -2314,25 +2316,26 @@ const time_ = v => v || '';
 const DTABLE_COLS = [
   { k:'id',        label:'번호',       cls:'stick c1 num', thCls:'stick c1',
     v:d => 'D' + String(d.id).padStart(3,'0'), s:d => d.id },
-  { k:'company',   label:'업체명',     cls:'stick c2', thCls:'stick c2',
+  { k:'scheduled_date', label:'배송날짜', cls:'stick c2', thCls:'stick c2',
+    v:d => d.scheduled_date || '-' },
+  { k:'company',   label:'업체명',     cls:'stick c3', thCls:'stick c3',
     v:d => escapeHtml(d.company || '-') },
   { k:'delivery_type', label:'유형',
     v:d => { const t = d.delivery_type || '출하';
              return `<span class="type-${t === '입하' ? 'in' : 'out'}">${t}</span>`; },
     s:d => d.delivery_type || '출하' },
-  { k:'destination', label:'목적지',   v:d => escapeHtml(d.destination || '-') },
   { k:'item_name',   label:'품목',     v:d => escapeHtml(d.item_name || '-') },
   { k:'quantity',    label:'수량(Kg)', cls:'right', thCls:'right',
     v:d => Number(d.quantity || 0).toLocaleString(), s:d => d.quantity || 0 },
+  { k:'delivery_time',  label:'배송시간',
+    v:d => d.delivery_time || '<span class="muted">미정</span>', s:d => time_(d.delivery_time) },
+  { k:'destination', label:'목적지',   v:d => escapeHtml(d.destination || '-') },
   { k:'driver',      label:'기사명',
     v:d => d.driver_user ? escapeHtml(d.driver_user.name) : '<span class="muted">미배차</span>',
     s:d => d.driver_user ? d.driver_user.name : '' },
   { k:'vehicle_number', label:'차량번호',
     v:d => d.vehicle_number ? escapeHtml(d.vehicle_number) : '<span class="muted">-</span>',
     s:d => d.vehicle_number || '' },
-  { k:'scheduled_date', label:'배송날짜', v:d => d.scheduled_date || '-' },
-  { k:'delivery_time',  label:'배송시간',
-    v:d => d.delivery_time || '<span class="muted">미정</span>', s:d => time_(d.delivery_time) },
   { k:'work_start_time', label:'업무시작',
     v:d => d.work_start_time || '<span class="muted">-</span>', s:d => time_(d.work_start_time) },
   { k:'loading_complete_time', label:'상차',
@@ -2414,9 +2417,13 @@ function renderDeliveryTab() {
 // 실제 폭으로 맞춘다. 글꼴·자릿수가 달라져도 스스로 따라간다.
 function syncStickyOffset() {
   const wrap = document.querySelector('.dtable-wrap');
-  const head = wrap && wrap.querySelector('th.c1');
-  if (!head) return;
-  wrap.style.setProperty('--c1w', Math.ceil(head.getBoundingClientRect().width) + 'px');
+  const h1 = wrap && wrap.querySelector('th.c1');
+  const h2 = wrap && wrap.querySelector('th.c2');
+  if (!h1 || !h2) return;
+  const w1 = Math.ceil(h1.getBoundingClientRect().width);
+  const w2 = Math.ceil(h2.getBoundingClientRect().width);
+  wrap.style.setProperty('--c1w', w1 + 'px');
+  wrap.style.setProperty('--c12w', (w1 + w2) + 'px');
 }
 window.addEventListener('resize', () => { if (deliveryView === 'table') syncStickyOffset(); });
 
@@ -2654,6 +2661,9 @@ function buildCardActions(d, mode) {
       parts.push(revert, `<button class="btn btn-success btn-sm" onclick="openPhotoModal(${d.id})">📄 계근표 등록</button>`);
     if (currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
       parts.push(`<button class="btn btn-sm" style="background:#e0e7ff;color:#3730a3;" onclick="event.stopPropagation();openEditDeliveryModal(${d.id})">✏️ 수정</button>`);
+    // 복사는 완료·취소된 건에서도 쓸모가 있다 (지난 건을 그대로 다시 보내는 경우)
+    if (currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery))
+      parts.push(`<button class="btn btn-sm" style="background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;" onclick="event.stopPropagation();openCopyDeliveryModal(${d.id})">📋 복사</button>`);
     return parts.join('');
   } else {
     // driverHistory 모드: 연/월 조회 탭 (1주일 이내면 상태 수정 가능)
@@ -3075,6 +3085,10 @@ function renderDetail(d) {
   if ((currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery) && d.status !== 'done' && d.status !== 'cancel')
     footer += `<button class="btn btn-outline" onclick="closeModal('detailModal');openEditDeliveryModal(${d.id})">✏️ 수정</button>`;
 
+  // 이 카드를 바탕으로 새 카드 만들기
+  if (currentUser.role === 'superadmin' || currentUser.role === 'admin' || currentUser.can_create_delivery)
+    footer += `<button class="btn btn-outline" onclick="closeModal('detailModal');openCopyDeliveryModal(${d.id})">📋 복사해서 새로 만들기</button>`;
+
   // 배차 버튼 (배차 권한자)
   if ((currentUser.role === 'superadmin' || currentUser.can_assign_vehicle) && d.status !== 'done' && d.status !== 'cancel')
     footer += `<button class="btn btn-primary" onclick="closeModal('detailModal');openAssignVehicleModal(${d.id})">🚛 배차 ${d.driver_id ? '변경' : '등록'}</button>`;
@@ -3235,6 +3249,42 @@ attachCombo('f-item',     '품목 입력 또는 선택');
 attachCombo('ed-item',    '품목 입력 또는 선택');
 attachCombo('av-driver',  '기사명·차량번호 입력 또는 선택');
 attachCombo('filterCompany', '전체 고객사', { includeEmpty: true });
+
+// 기존 배송 카드를 바탕으로 새 카드 만들기.
+// 같은 곳에 같은 물건을 반복해서 보내는 일이 많아, 매번 다시 입력하지 않도록 한다.
+// 날짜·시간·기사는 비운다 — 그대로 두면 엉뚱한 날에 엉뚱한 기사로 만들어지기 쉽다.
+async function openCopyDeliveryModal(id) {
+  const d = deliveriesCache[id];
+  if (!d) { showToast('⚠️ 배송 정보를 불러올 수 없습니다.'); return; }
+  openAssignModal();                      // 먼저 비우고 기본값을 세운 뒤 채운다
+
+  document.getElementById('f-type').value = d.delivery_type || '출하';
+  const cSel = document.getElementById('f-company');
+  ensureOption(cSel, d.company);          // 목록에서 빠진 고객사도 고를 수 있게
+  cSel.value = d.company || '';
+  refreshCombo('f-company');
+  const iSel = document.getElementById('f-item');
+  ensureOption(iSel, d.item_name);
+  iSel.value = d.item_name || '';
+  refreshCombo('f-item');
+  document.getElementById('f-dest').value = d.destination || '';
+  document.getElementById('f-qty').value  = d.quantity || '';
+  document.getElementById('f-note').value = d.notes || '';
+
+  // 날짜·시간은 비워 둔다 (기사는 이 창에 없고, 만든 뒤 따로 배차한다)
+  document.getElementById('f-date').value = '';
+  document.getElementById('f-time').value = '';
+
+  // 공개할 관리자도 그대로 가져온다
+  let viewerIds = d.viewer_ids;
+  if (!viewerIds) {                       // 목록 응답에는 없으므로 그 건을 따로 불러온다
+    try { viewerIds = (await api('GET', `/deliveries/${id}`)).viewer_ids || []; }
+    catch (e) { viewerIds = []; }
+  }
+  await renderViewerChecklist('f-viewers', viewerIds);
+
+  showToast(`📋 D${String(id).padStart(3,'0')} 내용을 가져왔습니다. 날짜를 정해주세요.`);
+}
 
 function openAssignModal() {
   const today = localDateStr();
