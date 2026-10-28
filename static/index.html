@@ -345,6 +345,14 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
   .tab-btn { font-size: 13px; padding: 12px 10px; }
   .modal { max-height: 95vh; }
   .download-bar { gap: 8px; }
+
+  /* 좁은 화면에서는 표의 '왼쪽 고정'을 푼다.
+     번호·배송날짜·업체명 세 칸이 화면의 85%를 차지해 나머지 열이
+     52px 안에 갇혔다. 고정을 풀면 전부 가로로 밀어 볼 수 있다.
+     머리글의 위쪽 고정은 그대로 둔다. */
+  .dtable td.stick { position: static; }
+  .dtable th.stick { left: auto; z-index: 2; }
+  .dtable .c3 { box-shadow: none; }
 }
 </style>
 </head>
