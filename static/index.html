@@ -122,7 +122,10 @@ header h2 { font-size: 16px; font-weight: 700; }
 .logout-btn:hover { background: rgba(255,255,255,.25); }
 
 /* 탭 바 */
-.tab-bar { background: #fff; border-bottom: 2px solid #e5e7eb; display: flex; padding: 0 16px; overflow-x: auto; }
+/* 머리글 바(66px) 바로 아래에 탭 바도 붙여 둔다.
+   화면을 내려도 지금 어느 탭인지 보이고 다른 탭으로 바로 옮길 수 있다. */
+.tab-bar { background: #fff; border-bottom: 2px solid #e5e7eb; display: flex; padding: 0 16px; overflow-x: auto;
+           position: sticky; top: var(--header-h, 66px); z-index: 90; }
 .tab-btn { padding: 14px 16px; font-size: 14px; font-weight: 600; color: #6b7280; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .15s; white-space: nowrap; flex-shrink: 0; }
 .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
 
@@ -203,7 +206,9 @@ th.sortable.sorted .sort-arrow { opacity: 1; }
 .viewtoggle button { padding: 6px 14px; border: none; background: transparent; border-radius: 6px; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; font-family: inherit; }
 .viewtoggle button.on { background: #fff; color: #1e3a5f; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
 /* 열이 17개라 가로로 넘친다. 번호·업체명은 왼쪽에 붙여 어느 줄인지 잃지 않게 한다. */
-.dtable-wrap { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+/* 표가 자기 영역 안에서 세로로도 스크롤해야 머리글(열 이름)이 위에 붙어 있을 수 있다.
+   높이는 화면에 맞춰 코드에서 정한다(syncTableHeight). */
+.dtable-wrap { overflow: auto; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
 .dtable { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; white-space: nowrap; }
 .dtable th { background: #1e3a5f; color: #fff; font-weight: 600; padding: 10px 12px; text-align: left; position: sticky; top: 0; z-index: 2; }
 .dtable th.sortable:hover,
@@ -1444,6 +1449,7 @@ async function initApp() {
   }
 
   await loadStageNotices();   // 상차/하차 유의사항 (확인 절차에 필요)
+  syncHeaderHeight();
   initPush();   // 알림 권한 상태에 따라 자동 구독 또는 '알림 켜기' 버튼 표시
 
   // 푸시 알림 클릭으로 진입한 경우 해당 배송카드 열기 (/?open=ID)
@@ -2418,11 +2424,32 @@ function renderDeliveryTab() {
   box.innerHTML = deliveryView === 'table'
     ? deliveryTableHTML(sortedDeliveryList())
     : renderDeliveryCards(deliveryTabList, 'admin');
-  if (deliveryView === 'table') syncStickyOffset();
+  if (deliveryView === 'table') { syncStickyOffset(); syncTableHeight(); }
 }
 
 // 왼쪽에 고정한 두 칸이 겹치지 않도록, 업체명 칸을 붙일 위치를 번호 칸의
 // 실제 폭으로 맞춘다. 글꼴·자릿수가 달라져도 스스로 따라간다.
+// 표가 화면 아래 끝까지 차지하도록 높이를 맞춘다.
+// 이래야 표 안에서 세로로 스크롤되고 열 이름이 위에 붙어 있는다.
+// 탭 바를 머리글 바 바로 아래에 붙이려면 머리글 바의 실제 높이가 필요하다.
+// 글자 크기가 화면 폭에 따라 달라져 고정값을 쓸 수 없다.
+function syncHeaderHeight() {
+  const h = document.querySelector('header');
+  if (!h) return;
+  document.documentElement.style.setProperty('--header-h',
+    Math.round(h.getBoundingClientRect().height) + 'px');
+}
+window.addEventListener('resize', syncHeaderHeight);
+syncHeaderHeight();
+
+function syncTableHeight() {
+  const wrap = document.querySelector('.dtable-wrap');
+  if (!wrap) return;
+  const top = wrap.getBoundingClientRect().top;
+  const h = Math.max(240, window.innerHeight - top - 16);   // 너무 납작해지지 않게 최소값
+  wrap.style.maxHeight = h + 'px';
+}
+
 function syncStickyOffset() {
   const wrap = document.querySelector('.dtable-wrap');
   const h1 = wrap && wrap.querySelector('th.c1');
@@ -2433,7 +2460,7 @@ function syncStickyOffset() {
   wrap.style.setProperty('--c1w', w1 + 'px');
   wrap.style.setProperty('--c12w', (w1 + w2) + 'px');
 }
-window.addEventListener('resize', () => { if (deliveryView === 'table') syncStickyOffset(); });
+window.addEventListener('resize', () => { if (deliveryView === 'table') { syncStickyOffset(); syncTableHeight(); } });
 
 // ═══════════════════════════════════════════════════
 // 기사 현황
