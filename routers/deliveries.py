@@ -701,15 +701,29 @@ def revert_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """관리자 전용: 상태를 이전 단계로 되돌리기"""
-    _forbid_observer(current_user, "되돌릴 수 없습니다")
-    if current_user.role != "superadmin" and not (current_user.can_create_delivery or current_user.can_assign_vehicle):
-        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    """상태를 이전 단계로 되돌리기.
 
+    관리자는 기간 제한 없이, 기사는 본인 배송을 7일 이내까지 되돌릴 수 있다.
+    (기사의 7일 제한은 상태 변경과 같은 규칙이다)
+    계근표를 잘못 올렸을 때 완료를 취소하고 다시 올리는 데 쓴다.
+    """
     d = db.query(models.Delivery).filter(models.Delivery.id == delivery_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="배송을 찾을 수 없습니다.")
     _require_view(d, db, current_user)
+    _forbid_observer(current_user, "되돌릴 수 없습니다")
+
+    if current_user.role == "driver":
+        if d.driver_id != current_user.id:
+            raise HTTPException(status_code=403, detail="본인 배송만 되돌릴 수 있습니다.")
+        from datetime import timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
+        if (d.scheduled_date or "") < cutoff:
+            raise HTTPException(
+                status_code=403,
+                detail="7일이 지난 배송은 기사가 되돌릴 수 없습니다. 관리자에게 요청해주세요.")
+    elif current_user.role != "superadmin" and not (current_user.can_create_delivery or current_user.can_assign_vehicle):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
     # 취소 철회: 대기중으로 복구하되 배차는 비운다.
     # 취소된 뒤 그 기사가 다른 일을 맡았을 수 있어, 옛 배차를 그대로 되살리면

@@ -2709,19 +2709,10 @@ function buildCardActions(d, mode) {
       parts.push(`<button class="btn btn-sm" style="background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;" onclick="event.stopPropagation();openCopyDeliveryModal(${d.id})">📋 복사</button>`);
     return parts.join('');
   } else {
-    // driverHistory 모드: 연/월 조회 탭 (1주일 이내면 상태 수정 가능)
-    if (mode === 'driverHistory') {
-      const canEdit = isWithinWeek(d.scheduled_date);
-      let btns = '';
-      if (canEdit && d.status !== 'cancel') {
-        btns += driverNextButton(d);
-        if (d.status !== 'wait')
-          btns += revert;   // 완료 건도 1주일 내에는 되돌려 계근표 재등록 가능
-      }
-      return btns;
-    }
-    // driver 모드: 오늘 활성 배송
-    return driverNextButton(d);
+    // 기사 화면은 카드에 버튼을 달지 않는다. deliveryCardHTML 이
+    // 기사 모드에서는 이 함수를 아예 부르지 않기 때문이다.
+    // 기사의 동작 버튼은 카드를 눌러 여는 상세 화면 아래쪽에 있다.
+    return '';
   }
 }
 
@@ -2757,6 +2748,22 @@ async function changeStatus(id, status) {
     if (status === 'start') body.work_start_time = nowTime();
     await api('PATCH', `/deliveries/${id}/status`, body);
     showToast(`"${label}"으로 변경되었습니다.`);
+    refreshCurrentTab();
+    closeModal('detailModal');
+  } catch (e) { showToast('⚠️ ' + e.message); }
+}
+
+// 완료 취소: 계근표를 잘못 올렸을 때 쓴다. 되돌리기와 같은 동작이지만
+// 무엇이 어떻게 되는지 따로 알려준다(사진이 지워지는 줄 알고 망설이기 쉽다).
+async function undoComplete(id) {
+  const msg = `완료를 취소하고 '하차' 상태로 되돌립니다.`
+    + '\n\n' + '계근표를 다시 올릴 수 있게 됩니다.'
+    + '\n' + '이미 올린 사진은 지워지지 않고 이전 회차로 남습니다.'
+    + '\n\n' + '진행할까요?';
+  if (!confirm(msg)) return;
+  try {
+    await api('PATCH', `/deliveries/${id}/revert`);
+    showToast('↩️ 완료를 취소했습니다. 계근표를 다시 등록해주세요.');
     refreshCurrentTab();
     closeModal('detailModal');
   } catch (e) { showToast('⚠️ ' + e.message); }
@@ -3148,6 +3155,9 @@ function renderDetail(d) {
       footer += `${rv}<button class="btn btn-primary" onclick="changeStatus(${d.id},'unloaded')">📥 하차 처리</button>`;
     if (d.status === 'unloaded')
       footer += `${rv}<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+    // 계근표를 잘못 올렸을 때 완료를 취소하고 다시 올린다
+    if (d.status === 'done')
+      footer += `<button class="btn btn-warning" onclick="undoComplete(${d.id})">↩️ 완료 취소</button>`;
   } else {
     if (d.status === 'wait')
       footer += `<button class="btn btn-primary" onclick="confirmStart(${d.id})">▶️ 업무시작</button>`;
@@ -3157,6 +3167,9 @@ function renderDetail(d) {
       footer += `<button class="btn btn-primary" onclick="confirmUnloaded(${d.id})">📥 하차</button>`;
     if (d.status === 'unloaded')
       footer += `<button class="btn btn-success" onclick="closeModal('detailModal');openPhotoModal(${d.id})">📄 계근표 등록</button>`;
+    // 기사도 본인 배송은 7일 이내까지 되돌려 계근표를 다시 올릴 수 있다
+    if (d.status === 'done' && d.driver_id === currentUser.id && isWithinWeek(d.scheduled_date))
+      footer += `<button class="btn btn-warning" onclick="undoComplete(${d.id})">↩️ 완료 취소</button>`;
   }
   document.getElementById('detailFooter').innerHTML = footer;
 }
